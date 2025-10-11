@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { gapi } from 'gapi-script';
 import { useSearchParams } from 'react-router-dom';
 
@@ -25,7 +25,7 @@ export default function GoogleSheetViewer() {
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [newData, setNewData] = useState<string[] | null>(null);
   const [, setIsLoading] = useState(true);
-  const lastDataRef = useRef<string[]>([]);
+  const lastFetchedRow = useRef<SheetRow | null>(null);
   const [visibleSections, setVisibleSections] = useState({
     ai: true,
     design: true,
@@ -33,212 +33,161 @@ export default function GoogleSheetViewer() {
     gameDev: true
   });
 
-  // Load all sheet data initially
+  // Initialize Google API
   useEffect(() => {
-    gapi.load('client:auth2', () => {
-      gapi.client
-        .init({
-          clientId: CLIENT_ID,
-          scope: SCOPES,
-        })
-        .then(async () => {
-          const auth = gapi.auth2.getAuthInstance();
-          setUserName(auth.currentUser.get().getBasicProfile().getName());
-          await loadAllSheetData();
-        });
+    gapi.load('client:auth2', async () => {
+      await gapi.client.init({ clientId: CLIENT_ID, scope: SCOPES });
+      const auth = gapi.auth2.getAuthInstance();
+      setUserName(auth.currentUser.get().getBasicProfile().getName());
+      fetchSheetData();
     });
   }, []);
 
-  // Filter rows based on name parameter and update current row based on page number
-  useEffect(() => {
-    if (allRows.length === 0) return;
-
-    const nameFilter = searchParams.get('name');
-    const pageParam = searchParams.get('q');
-    const pageNum = pageParam ? parseInt(pageParam) : 1;
-
-    // Filter rows if name parameter exists
-    const filtered = nameFilter
-      ? allRows.filter(row => row.data[13]?.toLowerCase().trim() === nameFilter.toLowerCase().trim())
-      : allRows;
-
-    setFilteredRows(filtered);
-
-    // Set current row based on page number
-    const currentIndex = pageNum - 1;
-    if (currentIndex >= 0 && currentIndex < filtered.length) {
-      const row = filtered[currentIndex];
-      setCurrentRow(row.data);
-      lastDataRef.current = row.data;
-      const lastColumnIndex = headers.length - 1;
-      setCommentText(row.data[lastColumnIndex] || '');
-    }
-  }, [allRows, searchParams, headers.length]);
-
-  // Set up auto-refresh interval
-  useEffect(() => {
-    const intervalId = setInterval(async () => {
-      try {
-        await gapi.client.load('sheets', 'v4');
-        const range = `${SHEET_NAME}!A1:BH`;
-        const res = await gapi.client.sheets.spreadsheets.values.get({
-          spreadsheetId: SHEET_ID,
-          range,
-        });
-        
-        const rows = res.result.values || [];
-        if (rows.length === 0) return;
-
-        const newRows = rows.slice(1).map((row: string[], index: number) => ({
-          data: row,
-          index: index + 1
-        }));
-
-        // Check if current row has changed
-        const currentPage = searchParams.get('q') ? parseInt(searchParams.get('q')!) : 1;
-        const currentIndex = currentPage - 1;
-        const currentFilteredRow = filteredRows[currentIndex];
-        
-        if (currentFilteredRow) {
-          const newRow = newRows.find((r: SheetRow) => r.index === currentFilteredRow.index);
-          if (newRow) {
-            const hasChanged = newRow.data.some((value: string | null | undefined, index: number) => {
-              const currentValue = value || '';
-              const previousValue = lastDataRef.current[index] || '';
-              return currentValue !== previousValue;
-            });
-
-            if (hasChanged) {
-              if (isEditing) {
-                setNewData(newRow.data);
-                setShowConflictWarning(true);
-              } else {
-                updateDataSmoothly(newRow.data);
-              }
-            }
-          }
-        }
-
-        setAllRows(newRows);
-      } catch (error) {
-        console.error('Error checking for updates:', error);
-      }
-    }, REFRESH_INTERVAL);
-
-    return () => clearInterval(intervalId);
-  }, [isEditing, searchParams, filteredRows]);
-
-  const loadAllSheetData = async () => {
+  // Fetch entire sheet data
+  const fetchSheetData = useCallback(async () => {
     setIsLoading(true);
     try {
       await gapi.client.load('sheets', 'v4');
-    
-      const range = `${SHEET_NAME}!A1:BH`;
       const res = await gapi.client.sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range,
+        range: `${SHEET_NAME}!A1:BH`,
       });
-    
-      const rows = res.result.values || [];
-      if (rows.length === 0) return;
 
-      setHeaders(rows[0] || []);
-      const newRows = rows.slice(1).map((row: string[], index: number) => ({
-        data: row,
-        index: index + 1
-      }));
-      setAllRows(newRows);
+      const rows = res.result.values || [];
+      if (!rows.length) return;
+
+      setHeaders(rows[0]);
+      const sheetRows = rows.slice(1).map((row: string[], index: number) => ({ data: row, index: index + 1 }));
+      setAllRows(sheetRows);
     } catch (error) {
       console.error('Error loading sheet data:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Filter rows and update currentRow
+  useEffect(() => {
+    if (!allRows.length) return;
+    const nameFilter = searchParams.get('name')?.toLowerCase().trim();
+    const pageParam = parseInt(searchParams.get('q') || '1', 10) - 1;
+
+    const filtered = nameFilter
+      ? allRows.filter(row => row.data[13]?.toLowerCase().trim() === nameFilter)
+      : allRows;
+
+    setFilteredRows(filtered);
+
+    const row = filtered[pageParam];
+    if (row) {
+      if (!lastFetchedRow.current || lastFetchedRow.current.index !== row.index) {
+        lastFetchedRow.current = row;
+        setCurrentRow(row.data);
+        const lastCol = headers.length - 1;
+        setCommentText(row.data[lastCol] || '');
+      }
+    }
+  }, [allRows, headers.length, searchParams]);
+
+  // Auto-refresh with conflict detection
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        await gapi.client.load('sheets', 'v4');
+        const res = await gapi.client.sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `${SHEET_NAME}!A1:BH`,
+        });
+
+        const rows = res.result.values?.slice(1).map((row: string[], index: number) => ({ data: row, index: index + 1 })) || [];
+        if (!rows.length) return;
+
+        setAllRows(prev => {
+          // Only update if there are changes
+          const changed = rows.some((r: SheetRow, i: number) => JSON.stringify(r.data) !== JSON.stringify(prev[i]?.data));
+          return changed ? rows : prev;
+        });
+
+        // Conflict detection for current row
+        if (lastFetchedRow.current) {
+          const updatedRow: SheetRow | undefined = rows.find((r: SheetRow) => r.index === lastFetchedRow.current!.index);
+          if (updatedRow && JSON.stringify(updatedRow.data) !== JSON.stringify(lastFetchedRow.current.data)) {
+            if (isEditing) {
+              setNewData(updatedRow.data);
+              setShowConflictWarning(true);
+            } else {
+              lastFetchedRow.current = updatedRow;
+              setCurrentRow(updatedRow.data);
+              setCommentText(updatedRow.data[headers.length - 1] || '');
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Auto-refresh error:', err);
+      }
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [headers.length, isEditing]);
 
   const updateDataSmoothly = (newRow: string[]) => {
-    lastDataRef.current = newRow;
+    lastFetchedRow.current = { data: newRow, index: lastFetchedRow.current?.index || 0 };
     setCurrentRow(newRow);
-    const lastColumnIndex = headers.length - 1;
-    setCommentText(newRow[lastColumnIndex] || '');
+    setCommentText(newRow[headers.length - 1] || '');
   };
 
   const saveComment = async () => {
-    const pageParam = searchParams.get('q');
-    const pageNum = pageParam ? parseInt(pageParam) : 1;
-    const currentIndex = pageNum - 1;
-    const currentFilteredRow = filteredRows[currentIndex];
-    
-    if (!currentFilteredRow) return;
-
-    const rowIndex = currentFilteredRow.index + 1; // +1 because we skipped header row
-    const columnIndex = headers.length; // Last column
-
-    // Convert column index to letter (e.g., 1 = A, 2 = B, 27 = AA, etc.)
-    const getColumnLetter = (index: number): string => {
-      let temp = index;
-      let letter = '';
-      while (temp > 0) {
-        const remainder = (temp - 1) % 26;
-        letter = String.fromCharCode(65 + remainder) + letter;
-        temp = Math.floor((temp - 1) / 26);
-      }
+    if (!lastFetchedRow.current) return;
+    const rowIndex = lastFetchedRow.current.index + 1;
+    const colIndex = headers.length;
+    const getColumnLetter = (index: number) => {
+      let temp = index, letter = '';
+      while (temp > 0) { letter = String.fromCharCode(65 + (temp - 1) % 26) + letter; temp = Math.floor((temp - 1) / 26); }
       return letter;
     };
 
     try {
-      const columnLetter = getColumnLetter(columnIndex);
-      
-      // First, get the current value to check for conflicts
-      const currentValue = await gapi.client.sheets.spreadsheets.values.get({
+      const colLetter = getColumnLetter(colIndex);
+      const currentVal = await gapi.client.sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!${columnLetter}${rowIndex}`,
+        range: `${SHEET_NAME}!${colLetter}${rowIndex}`,
       });
+      const existingValue = currentVal.result.values?.[0]?.[0] || '';
+      const currentAnswer = currentRow[colIndex - 1] || '';
 
-      const existingValue = currentValue.result.values?.[0]?.[0] || '';
-      const currentAnswerValue = currentRow[columnIndex - 1] || '';
-      
-      // If the value has changed since we started editing, show conflict warning
-      if (existingValue !== currentAnswerValue) {
+      if (existingValue !== currentAnswer) {
         setNewData([...currentRow.slice(0, -1), existingValue]);
         setShowConflictWarning(true);
         return;
       }
 
-      // If no conflict, proceed with saving
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!${columnLetter}${rowIndex}`,
+        range: `${SHEET_NAME}!${colLetter}${rowIndex}`,
         valueInputOption: 'RAW',
-        resource: {
-          values: [[commentText]]
-        }
+        resource: { values: [[commentText]] },
       });
 
-      // Update local state
-      const newAnswers = [...currentRow];
-      newAnswers[columnIndex - 1] = commentText;
-      setCurrentRow(newAnswers);
+      const updated = [...currentRow];
+      updated[colIndex - 1] = commentText;
+      updateDataSmoothly(updated);
       setIsEditing(false);
     } catch (error) {
-      console.error('Error saving comment:', error);
+      console.error('Save comment error:', error);
       alert('Failed to save comment. Please try again.');
     }
   };
 
-  // Function to determine section priorities
+  // Section visibility & priorities
   const getSectionPriorities = () => {
     const priorities: { [key: string]: number } = {};
-    const priorityResponses = currentRow.slice(13, 17); // Questions 14-17 (0-based index)
-    
-    priorityResponses.forEach((response, index) => {
-      if (response) {
-        const section = response.toLowerCase();
-        if (['ai', 'hack', 'game dev', 'design'].includes(section)) {
-          priorities[section === 'game dev' ? 'gameDev' : section] = index + 1;
-        }
+    currentRow.slice(13, 17).forEach((r, i) => {
+      if (!r) return;
+      const section = r.toLowerCase();
+      if (['ai', 'hack', 'game dev', 'design'].includes(section)) {
+        priorities[section === 'game dev' ? 'gameDev' : section] = i + 1;
       }
     });
-    
     return priorities;
   };
 
@@ -248,82 +197,40 @@ export default function GoogleSheetViewer() {
       ai: priorities.ai !== undefined,
       design: priorities.design !== undefined,
       hack: priorities.hack !== undefined,
-      gameDev: priorities.gameDev !== undefined
+      gameDev: priorities.gameDev !== undefined,
     });
   }, [currentRow]);
 
-  // Function to get priority label
   const getPriorityLabel = (section: string) => {
-    const priorities = getSectionPriorities();
-    const priority = priorities[section];
-    if (priority === undefined) return '';
-    return ` (#${priority} Priority)`;
+    const p = getSectionPriorities()[section];
+    return p ? ` (#${p} Priority)` : '';
   };
 
-  // Helper function to convert URLs to clickable links
   const linkifyText = (text: string) => {
     if (!text) return text;
-    
-    // URL regex pattern
     const urlPattern = /(https?:\/\/[^\s]+)/g;
-    
-    // Split text by URLs and map to elements
-    const parts = text.split(urlPattern);
-    return parts.map((part, index) => {
-      if (part.match(urlPattern)) {
-        return (
-          <a 
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 underline"
-          >
-            {part}
-          </a>
-        );
-      }
-      return part;
-    });
+    return text.split(urlPattern).map((part, idx) => part.match(urlPattern)
+      ? <a key={idx} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">{part}</a>
+      : part
+    );
   };
 
-  const scrollToComments = () => {
-    const commentsSection = document.querySelector('.comments-section');
-    if (commentsSection) {
-      commentsSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+  const scrollToComments = () => document.querySelector('.comments-section')?.scrollIntoView({ behavior: 'smooth' });
 
   return (
     <div className="p-4">
-      {showConflictWarning && (
+      {showConflictWarning && newData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">New Data Available</h3>
-            <p className="text-gray-700 mb-4">
-              New data has been detected while you were editing. Please copy your current comment before refreshing:
-            </p>
-            <div className="bg-gray-100 p-4 rounded mb-4">
-              <pre className="whitespace-pre-wrap">{commentText}</pre>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  if (newData) {
-                    updateDataSmoothly(newData);
-                    setShowConflictWarning(false);
-                    setIsEditing(false);
-                  }
-                }}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-              >
-                Refresh Data
-              </button>
+            <p className="text-gray-700 mb-4">New data has been detected while you were editing. Please copy your current comment before refreshing:</p>
+            <div className="bg-gray-100 p-4 rounded mb-4"><pre className="whitespace-pre-wrap">{commentText}</pre></div>
+            <div className="flex justify-end">
+              <button onClick={() => { updateDataSmoothly(newData); setShowConflictWarning(false); setIsEditing(false); }} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">Refresh Data</button>
             </div>
           </div>
         </div>
       )}
-
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-col items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
