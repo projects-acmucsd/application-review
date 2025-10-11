@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
-const SHEET_ID = '1AHWbFDbzY5hC7u5m7ZxMnb5exfCh1wRa81p4j0w7BM0';
+const SHEET_ID = '1lJSS8R-SuGULx3ATWucr9k7FgK_4gmr4E4gUwsUddAY';
 const SHEET_NAME = "'Form Responses 1'";
 const REFRESH_INTERVAL = 20000;
 
