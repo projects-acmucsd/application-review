@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
-const SHEET_ID = '1K1kknP04sghLZHXclpcD5V0JFb8F5yLSFnH4vJJCj-c';
+const SHEET_ID = '1AHWbFDbzY5hC7u5m7ZxMnb5exfCh1wRa81p4j0w7BM0';
 const SHEET_NAME = "'Form Responses 1'";
 const REFRESH_INTERVAL = 20000;
 
@@ -420,7 +420,7 @@ export default function GoogleSheetViewer() {
             <div className="bg-gray-50 p-4">
               <h2 className="text-xl font-bold text-gray-900">Other Questions</h2>
             </div>
-            {headers.slice(53, 59).map((question, i) => (
+            {headers.slice(53, 57).map((question, i) => (
               <div key={i + 53} className="p-6 hover:bg-gray-50 transition-colors">
                 <div className="mb-2">
                   <h3 className="text-lg font-medium text-gray-900">{question}</h3>
