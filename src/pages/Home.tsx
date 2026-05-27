@@ -17,9 +17,11 @@ import {
   getStoredGoogleProfile,
   hasStoredGoogleSession,
   hasGoogleSignInStartRequest,
+  isDemoAuthEnabled,
   isDevelopmentAuthEnabled,
   redirectToGoogleSignIn,
   restoreGoogleSession,
+  signInWithDemoAdminUser,
   signInWithDevelopmentUser,
   signOutFromGoogle,
 } from '../lib/googleAuth';
@@ -259,6 +261,16 @@ export default function Home() {
     loadDashboardData();
   };
 
+  const signInForDemoAdmin = () => {
+    setErrorMessage('');
+    const session = signInWithDemoAdminUser();
+    setIsSignedIn(true);
+    setUserName(session.profile.name);
+    clearReviewCaches();
+    setIsAdmin(true);
+    loadDashboardData();
+  };
+
   const signOut = async () => {
     setErrorMessage('');
 
@@ -297,6 +309,14 @@ export default function Home() {
             </span>
             Continue with Google
           </button>
+          {isDemoAuthEnabled() ? (
+            <button
+              onClick={signInForDemoAdmin}
+              className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#333] px-4 text-base font-bold text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2"
+            >
+              Use Demo Admin
+            </button>
+          ) : null}
           {isDevelopmentAuthEnabled() ? (
             <button
               onClick={signInForDevelopment}

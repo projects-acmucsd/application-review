@@ -89,7 +89,7 @@ export const env = {
   googleClientSecret: getOptionalEnv('GOOGLE_CLIENT_SECRET'),
   googleRedirectDev: process.env.GOOGLE_REDIRECT_DEV ?? 'http://localhost:5173',
   googleRedirectProd:
-    process.env.GOOGLE_REDIRECT_PROD ?? 'https://acm-projects-app-review-tan.vercel.app',
+    process.env.GOOGLE_REDIRECT_PROD ?? 'https://application-review-five.vercel.app',
   supabaseUrl: getOptionalEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: getOptionalEnv('SUPABASE_SERVICE_ROLE_KEY'),
   adminEmails: parseEmailList(process.env.ADMIN_EMAILS),

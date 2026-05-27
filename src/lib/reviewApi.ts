@@ -1,4 +1,9 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import {
+  getApiBaseUrl,
+  getStoredGoogleAccessToken,
+  getStoredGoogleProfile,
+  isDemoGoogleSession,
+} from './googleAuth';
 
 const API_CACHE_TTL_MS = 5 * 60_000;
 
@@ -35,6 +40,7 @@ interface CacheEntry<T> {
 
 let applicationReviewsCache: CacheEntry<ApplicationReview[]> | null = null;
 let reviewStatsCache: CacheEntry<ReviewStats> | null = null;
+let demoReviews: ApplicationReview[] = [];
 
 function getAuthorizationHeaders() {
   const accessToken = getStoredGoogleAccessToken();
@@ -46,6 +52,39 @@ function getAuthorizationHeaders() {
   return {
     Authorization: `Bearer ${accessToken}`,
   };
+}
+
+function getDemoReviewer() {
+  return (
+    getStoredGoogleProfile() ?? {
+      email: 'demo-admin@acmucsd.org',
+      name: 'Demo Admin',
+      picture: '',
+    }
+  );
+}
+
+function getDemoReviewStats(): ReviewStats {
+  return demoReviews.reduce(
+    (stats, review) => {
+      if (!review.decision) {
+        return stats;
+      }
+
+      return {
+        totalDecisions: stats.totalDecisions + 1,
+        accepted: stats.accepted + (review.decision === 'accept' ? 1 : 0),
+        waitlisted: stats.waitlisted + (review.decision === 'waitlist' ? 1 : 0),
+        rejected: stats.rejected + (review.decision === 'reject' ? 1 : 0),
+      };
+    },
+    {
+      totalDecisions: 0,
+      accepted: 0,
+      waitlisted: 0,
+      rejected: 0,
+    },
+  );
 }
 
 async function readApiJson<T>(response: Response): Promise<T> {
@@ -85,9 +124,14 @@ function readCached<T>(
 export function clearReviewCaches() {
   applicationReviewsCache = null;
   reviewStatsCache = null;
+  demoReviews = [];
 }
 
 export async function listApplicationReviews(): Promise<ApplicationReview[]> {
+  if (isDemoGoogleSession()) {
+    return demoReviews;
+  }
+
   const response = await readCached(
     applicationReviewsCache,
     async () => {
@@ -115,6 +159,24 @@ export async function saveApplicationReview({
   rating: number | null;
   decision: ReviewDecision | null;
 }): Promise<ApplicationReview> {
+  if (isDemoGoogleSession()) {
+    const profile = getDemoReviewer();
+    const review = {
+      applicationId,
+      rating,
+      decision,
+      updatedByEmail: profile.email,
+      updatedByName: profile.name,
+      updatedAt: new Date().toISOString(),
+    };
+
+    demoReviews = [
+      review,
+      ...demoReviews.filter((item) => item.applicationId !== applicationId),
+    ];
+    return review;
+  }
+
   const response = await readApiJson<ApiDataResponse<ApplicationReview>>(
     await fetch(`${getApiBaseUrl()}/api/reviews/${encodeURIComponent(applicationId)}`, {
       method: 'PUT',
@@ -146,6 +208,10 @@ export async function saveApplicationReview({
 }
 
 export async function getReviewStats(): Promise<ReviewStats> {
+  if (isDemoGoogleSession()) {
+    return getDemoReviewStats();
+  }
+
   const response = await readCached(
     reviewStatsCache,
     async () => {

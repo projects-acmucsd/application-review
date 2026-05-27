@@ -1,4 +1,9 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import {
+  getApiBaseUrl,
+  getStoredGoogleAccessToken,
+  getStoredGoogleProfile,
+  isDemoGoogleSession,
+} from './googleAuth';
 
 const API_CACHE_TTL_MS = 5 * 60_000;
 
@@ -39,6 +44,19 @@ interface CacheEntry<T> {
 let reviewSettingsCache: CacheEntry<ReviewSettings> | null = null;
 let applicationSourceSettingsCache: CacheEntry<ApplicationSourceSettings> | null =
   null;
+let demoReviewSettings: ReviewSettings = {
+  dueDate: '2026-05-03',
+  updatedByEmail: 'demo-admin@acmucsd.org',
+  updatedAt: new Date(0).toISOString(),
+};
+let demoApplicationSourceSettings: ApplicationSourceSettings = {
+  spreadsheetId: 'demo-application-sheet',
+  spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/demo-application-sheet/edit',
+  sheetName: 'Form Responses 1',
+  sheetRange: 'A1:BH',
+  updatedByEmail: 'demo-admin@acmucsd.org',
+  updatedAt: new Date(0).toISOString(),
+};
 
 function getAuthorizationHeaders() {
   const accessToken = getStoredGoogleAccessToken();
@@ -50,6 +68,10 @@ function getAuthorizationHeaders() {
   return {
     Authorization: `Bearer ${accessToken}`,
   };
+}
+
+function getDemoUpdaterEmail(): string {
+  return getStoredGoogleProfile()?.email ?? 'demo-admin@acmucsd.org';
 }
 
 async function readApiJson<T>(response: Response): Promise<T> {
@@ -87,6 +109,10 @@ function readCached<T>(
 }
 
 export async function getReviewSettings(): Promise<ReviewSettings> {
+  if (isDemoGoogleSession()) {
+    return demoReviewSettings;
+  }
+
   const response = await readCached(
     reviewSettingsCache,
     async () => {
@@ -106,6 +132,10 @@ export async function getReviewSettings(): Promise<ReviewSettings> {
 }
 
 export async function getApplicationSourceSettings(): Promise<ApplicationSourceSettings> {
+  if (isDemoGoogleSession()) {
+    return demoApplicationSourceSettings;
+  }
+
   const response = await readCached(
     applicationSourceSettingsCache,
     async () => {
@@ -128,6 +158,15 @@ export async function getApplicationSourceSettings(): Promise<ApplicationSourceS
 export async function updateReviewDueDate(
   dueDate: string,
 ): Promise<ReviewSettings> {
+  if (isDemoGoogleSession()) {
+    demoReviewSettings = {
+      dueDate,
+      updatedByEmail: getDemoUpdaterEmail(),
+      updatedAt: new Date().toISOString(),
+    };
+    return demoReviewSettings;
+  }
+
   const response = await readApiJson<ApiDataResponse<ReviewSettings>>(
     await fetch(`${getApiBaseUrl()}/api/admin/settings/review`, {
       method: 'PUT',
@@ -149,6 +188,18 @@ export async function updateReviewDueDate(
 export async function updateApplicationSourceSettings(
   input: UpdateApplicationSourceInput,
 ): Promise<ApplicationSourceSettings> {
+  if (isDemoGoogleSession()) {
+    demoApplicationSourceSettings = {
+      spreadsheetId: 'demo-application-sheet',
+      spreadsheetUrl: input.spreadsheetUrl,
+      sheetName: input.sheetName,
+      sheetRange: demoApplicationSourceSettings.sheetRange,
+      updatedByEmail: getDemoUpdaterEmail(),
+      updatedAt: new Date().toISOString(),
+    };
+    return demoApplicationSourceSettings;
+  }
+
   const response = await readApiJson<ApiDataResponse<ApplicationSourceSettings>>(
     await fetch(`${getApiBaseUrl()}/api/admin/settings/application-source`, {
       method: 'PUT',

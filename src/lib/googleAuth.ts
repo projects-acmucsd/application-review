@@ -4,12 +4,18 @@ const GOOGLE_SESSION_STORAGE_KEY = 'google_session';
 const GOOGLE_OAUTH_STATE_STORAGE_KEY = 'google_oauth_state';
 const GOOGLE_OAUTH_START_PARAM = 'google_sign_in';
 const DEVELOPMENT_ACCESS_TOKEN = 'development-access-token';
+const DEMO_ADMIN_ACCESS_TOKEN = 'demo-admin-access-token';
 const GOOGLE_AUTH_TIMEOUT_MS = 10_000;
 const GOOGLE_SESSION_REVALIDATE_MS = 5 * 60_000;
 const ALLOWED_GOOGLE_EMAIL_DOMAIN = 'acmucsd.org';
 const ALLOWED_GOOGLE_EMAIL_SUFFIX = `@${ALLOWED_GOOGLE_EMAIL_DOMAIN}`;
 const DEFAULT_PRODUCTION_GOOGLE_REDIRECT_URI =
-  'https://acm-projects-app-review-tan.vercel.app';
+  'https://application-review-five.vercel.app';
+const DEMO_ADMIN_PROFILE = {
+  email: 'demo-admin@acmucsd.org',
+  name: 'Demo Admin',
+  picture: '',
+};
 
 export interface GoogleProfile {
   email: string;
@@ -40,8 +46,20 @@ export function isDevelopmentAuthEnabled(): boolean {
   return import.meta.env.DEV;
 }
 
+export function isDemoAuthEnabled(): boolean {
+  return import.meta.env.VITE_ENABLE_DEMO_ADMIN === 'true';
+}
+
 function isDevelopmentSession(session: GoogleSession | null): boolean {
   return session?.accessToken === DEVELOPMENT_ACCESS_TOKEN;
+}
+
+function isDemoSession(session: GoogleSession | null): boolean {
+  return isDemoAuthEnabled() && session?.accessToken === DEMO_ADMIN_ACCESS_TOKEN;
+}
+
+export function isDemoGoogleSession(): boolean {
+  return isDemoSession(getStoredSession());
 }
 
 function isAllowedGoogleProfile(profile: GoogleProfile): boolean {
@@ -558,7 +576,10 @@ export async function restoreGoogleSession(): Promise<GoogleSession | null> {
     return currentSession;
   }
 
-  if (isDevelopmentSession(session) && isDevelopmentAuthEnabled()) {
+  if (
+    isDemoSession(session) ||
+    (isDevelopmentSession(session) && isDevelopmentAuthEnabled())
+  ) {
     if (isAllowedGoogleProfile(session.profile)) {
       return session;
     }
@@ -601,6 +622,20 @@ export function signInWithDevelopmentUser(): GoogleSession {
   return session;
 }
 
+export function signInWithDemoAdminUser(): GoogleSession {
+  if (!isDemoAuthEnabled()) {
+    throw new Error('Demo admin sign-in is not enabled for this deployment.');
+  }
+
+  const session = {
+    accessToken: DEMO_ADMIN_ACCESS_TOKEN,
+    profile: DEMO_ADMIN_PROFILE,
+  };
+
+  setStoredSession(session);
+  return session;
+}
+
 export async function signOutFromGoogle(): Promise<void> {
   const session = getStoredSession();
 
@@ -627,7 +662,10 @@ export async function getGoogleApiClient(): Promise<GoogleApi> {
     throw new Error('Missing Google access token.');
   }
 
-  if (isDevelopmentSession(session) && isDevelopmentAuthEnabled()) {
+  if (
+    isDemoSession(session) ||
+    (isDevelopmentSession(session) && isDevelopmentAuthEnabled())
+  ) {
     return createMockGoogleApiClient();
   }
 

@@ -1,4 +1,9 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import {
+  getApiBaseUrl,
+  getStoredGoogleAccessToken,
+  getStoredGoogleProfile,
+  isDemoGoogleSession,
+} from './googleAuth';
 
 const ADMIN_ACCESS_STORAGE_KEY = 'acm_projects_admin_access';
 const API_CACHE_TTL_MS = 5 * 60_000;
@@ -43,6 +48,13 @@ let adminStatusCache: CacheEntry<AdminStatus> | null = null;
 let adminAssignmentsCache: CacheEntry<ApplicationAssignment[]> | null = null;
 let myAssignmentsCache: CacheEntry<ApplicationAssignment[]> | null = null;
 let adminReviewersCache: CacheEntry<ReviewerOption[]> | null = null;
+let demoAssignments: ApplicationAssignment[] = [];
+
+const DEMO_REVIEWERS: ReviewerOption[] = [
+  { email: 'demo-admin@acmucsd.org', name: 'Demo Admin' },
+  { email: 'demo-reviewer@acmucsd.org', name: 'Demo Reviewer' },
+  { email: 'demo-lead@acmucsd.org', name: 'Demo Lead' },
+];
 
 function getAuthorizationHeaders() {
   const accessToken = getStoredGoogleAccessToken();
@@ -54,6 +66,45 @@ function getAuthorizationHeaders() {
   return {
     Authorization: `Bearer ${accessToken}`,
   };
+}
+
+function getDemoProfile() {
+  return (
+    getStoredGoogleProfile() ?? {
+      email: 'demo-admin@acmucsd.org',
+      name: 'Demo Admin',
+      picture: '',
+    }
+  );
+}
+
+function createDemoAssignment(
+  applicationId: string,
+  assignee: ReviewerOption,
+): ApplicationAssignment {
+  const profile = getDemoProfile();
+  const now = new Date().toISOString();
+
+  return {
+    applicationId,
+    assigneeEmail: assignee.email,
+    assigneeName: assignee.name,
+    assignedByEmail: profile.email,
+    assignedAt: now,
+    updatedAt: now,
+  };
+}
+
+function saveDemoAssignment(
+  applicationId: string,
+  assignee: ReviewerOption,
+): ApplicationAssignment {
+  const assignment = createDemoAssignment(applicationId, assignee);
+  demoAssignments = [
+    assignment,
+    ...demoAssignments.filter((item) => item.applicationId !== applicationId),
+  ];
+  return assignment;
 }
 
 async function readApiJson<T>(response: Response): Promise<T> {
@@ -130,6 +181,7 @@ export function clearCachedAdminAccess() {
   adminStatusCache = null;
   clearAssignmentCaches();
   adminReviewersCache = null;
+  demoAssignments = [];
 }
 
 export function clearAssignmentCaches() {
@@ -138,6 +190,17 @@ export function clearAssignmentCaches() {
 }
 
 export async function getAdminStatus(): Promise<AdminStatus> {
+  if (isDemoGoogleSession()) {
+    const profile = getDemoProfile();
+    const status = {
+      isAdmin: true,
+      profile,
+    };
+
+    localStorage.setItem(ADMIN_ACCESS_STORAGE_KEY, 'true');
+    return status;
+  }
+
   const status = await readCached(
     adminStatusCache,
     async () =>
@@ -160,6 +223,10 @@ export async function getAdminStatus(): Promise<AdminStatus> {
 }
 
 export async function listAdminReviewers(): Promise<ReviewerOption[]> {
+  if (isDemoGoogleSession()) {
+    return DEMO_REVIEWERS;
+  }
+
   const response = await readCached(
     adminReviewersCache,
     async () => {
@@ -179,6 +246,10 @@ export async function listAdminReviewers(): Promise<ReviewerOption[]> {
 }
 
 export async function listAdminAssignments(): Promise<ApplicationAssignment[]> {
+  if (isDemoGoogleSession()) {
+    return demoAssignments;
+  }
+
   const response = await readCached(
     adminAssignmentsCache,
     async () => {
@@ -198,6 +269,13 @@ export async function listAdminAssignments(): Promise<ApplicationAssignment[]> {
 }
 
 export async function listMyAssignments(): Promise<ApplicationAssignment[]> {
+  if (isDemoGoogleSession()) {
+    const profile = getDemoProfile();
+    return demoAssignments.filter(
+      (assignment) => assignment.assigneeEmail === profile.email,
+    );
+  }
+
   const response = await readCached(
     myAssignmentsCache,
     async () => {
@@ -223,6 +301,10 @@ export async function assignApplication({
   applicationId: string;
   assignee: ReviewerOption;
 }): Promise<ApplicationAssignment> {
+  if (isDemoGoogleSession()) {
+    return saveDemoAssignment(applicationId, assignee);
+  }
+
   const response = await readApiJson<ApiDataResponse<ApplicationAssignment>>(
     await fetch(
       `${getApiBaseUrl()}/api/admin/assignments/${encodeURIComponent(applicationId)}`,
@@ -252,6 +334,12 @@ export async function bulkAssignApplications({
   applicationIds: string[];
   assignee: ReviewerOption;
 }): Promise<ApplicationAssignment[]> {
+  if (isDemoGoogleSession()) {
+    return applicationIds.map((applicationId) =>
+      saveDemoAssignment(applicationId, assignee),
+    );
+  }
+
   const response = await readApiJson<ApiDataResponse<ApplicationAssignment[]>>(
     await fetch(`${getApiBaseUrl()}/api/admin/assignments/bulk`, {
       method: 'POST',
@@ -277,6 +365,14 @@ export async function bulkClearAssignments({
 }: {
   applicationIds: string[];
 }): Promise<string[]> {
+  if (isDemoGoogleSession()) {
+    const applicationIdSet = new Set(applicationIds);
+    demoAssignments = demoAssignments.filter(
+      (assignment) => !applicationIdSet.has(assignment.applicationId),
+    );
+    return applicationIds;
+  }
+
   const response = await readApiJson<ApiDataResponse<string[]>>(
     await fetch(`${getApiBaseUrl()}/api/admin/assignments/bulk-clear`, {
       method: 'POST',
@@ -298,6 +394,13 @@ export async function bulkClearAssignments({
 export async function clearApplicationAssignment(
   applicationId: string,
 ): Promise<void> {
+  if (isDemoGoogleSession()) {
+    demoAssignments = demoAssignments.filter(
+      (assignment) => assignment.applicationId !== applicationId,
+    );
+    return;
+  }
+
   await fetch(
     `${getApiBaseUrl()}/api/admin/assignments/${encodeURIComponent(applicationId)}`,
     {

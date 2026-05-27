@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_WS_BASE_URL?: string;
   readonly VITE_GOOGLE_CLIENT_ID: string;
   readonly VITE_GOOGLE_REDIRECT_URI?: string;
+  readonly VITE_ENABLE_DEMO_ADMIN?: string;
   readonly VITE_REVIEWER_LIST?: string;
 }
 
