@@ -9,7 +9,7 @@ const GOOGLE_SESSION_REVALIDATE_MS = 5 * 60_000;
 const ALLOWED_GOOGLE_EMAIL_DOMAIN = 'acmucsd.org';
 const ALLOWED_GOOGLE_EMAIL_SUFFIX = `@${ALLOWED_GOOGLE_EMAIL_DOMAIN}`;
 const DEFAULT_PRODUCTION_GOOGLE_REDIRECT_URI =
-  'https://acm-projects-app-review.vercel.app';
+  'https://acm-projects-app-review-tan.vercel.app';
 
 export interface GoogleProfile {
   email: string;

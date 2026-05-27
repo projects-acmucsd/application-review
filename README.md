@@ -25,9 +25,9 @@ npm run build
 ## OAuth Redirects
 
 Production builds default Google sign-in to
-`https://acm-projects-app-review.vercel.app`, matching the backend
+`https://acm-projects-app-review-tan.vercel.app`, matching the backend
 `GOOGLE_REDIRECT_PROD` default. Set `VITE_GOOGLE_REDIRECT_URI` and
 `GOOGLE_REDIRECT_PROD` to the same Google-authorized production origin if that
-canonical URL changes. Preview deployments bounce to the canonical origin before
-starting Google sign-in instead of using an unregistered preview URL as the
-OAuth redirect URI.
+canonical URL changes. Non-production deployments bounce to the configured
+production origin before starting Google sign-in instead of using an
+unregistered preview URL as the OAuth redirect URI.
