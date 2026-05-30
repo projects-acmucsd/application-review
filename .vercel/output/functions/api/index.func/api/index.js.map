@@ -1,0 +1,1 @@
+{"version":3,"file":"index.ts","sources":["/Users/justinwang/Documents/acm/ACMProjectsAppReview/api/index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,SAAS,EAAE,MAAM,uBAAuB,CAAC;AAElD,eAAe,SAAS,EAAE,CAAC","sourcesContent":["import { createApp } from '../backend/src/app.js';\n\nexport default createApp();\n"]}

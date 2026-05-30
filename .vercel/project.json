@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_dXxvBeokwSN8djXtqHfEiBOCuzKY",
+  "orgId": "team_45H8EmSSUcex3Kd24q4jan8u",
+  "projectName": "acm-projects-app-review",
+  "settings": {
+    "createdAt": 1779858443490,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
