@@ -2,7 +2,7 @@ import {
   createSupabaseUnavailableError,
   getSupabaseAdmin,
   isSupabaseConnectionError,
-  shouldUseSupabaseReadFallback,
+  readFromSupabaseWithFallback,
 } from '../../lib/supabase.js';
 import {
   createHttpError,
@@ -89,20 +89,18 @@ export async function listApplicationReviews(
 ): Promise<ApplicationReview[]> {
   await fetchGoogleProfile(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_reviews')
-    .select('*')
-    .order('updated_at', { ascending: false });
+  return readFromSupabaseWithFallback([], async (supabase) => {
+    const { data, error } = await supabase
+      .from('application_reviews')
+      .select('*')
+      .order('updated_at', { ascending: false });
 
-  if (error) {
-    if (shouldUseSupabaseReadFallback(error)) {
-      return [];
+    if (error) {
+      throw error;
     }
 
-    throw error;
-  }
-
-  return (data ?? []).map(toReview);
+    return (data ?? []).map(toReview);
+  });
 }
 
 export async function upsertApplicationReview({
@@ -151,32 +149,30 @@ export async function getApplicationReviewStats(
 ): Promise<ReviewStats> {
   await fetchGoogleProfile(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_reviews')
-    .select('decision')
-    .not('decision', 'is', null);
+  return readFromSupabaseWithFallback(EMPTY_REVIEW_STATS, async (supabase) => {
+    const { data, error } = await supabase
+      .from('application_reviews')
+      .select('decision')
+      .not('decision', 'is', null);
 
-  if (error) {
-    if (shouldUseSupabaseReadFallback(error)) {
-      return EMPTY_REVIEW_STATS;
+    if (error) {
+      throw error;
     }
 
-    throw error;
-  }
+    return (data ?? []).reduce<ReviewStats>(
+      (stats, row) => {
+        if (row.decision === 'accept') {
+          stats.accepted += 1;
+        } else if (row.decision === 'waitlist') {
+          stats.waitlisted += 1;
+        } else if (row.decision === 'reject') {
+          stats.rejected += 1;
+        }
 
-  return (data ?? []).reduce<ReviewStats>(
-    (stats, row) => {
-      if (row.decision === 'accept') {
-        stats.accepted += 1;
-      } else if (row.decision === 'waitlist') {
-        stats.waitlisted += 1;
-      } else if (row.decision === 'reject') {
-        stats.rejected += 1;
-      }
-
-      stats.totalDecisions += 1;
-      return stats;
-    },
-    { ...EMPTY_REVIEW_STATS },
-  );
+        stats.totalDecisions += 1;
+        return stats;
+      },
+      { ...EMPTY_REVIEW_STATS },
+    );
+  });
 }

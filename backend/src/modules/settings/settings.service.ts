@@ -2,7 +2,7 @@ import {
   createSupabaseUnavailableError,
   getSupabaseAdmin,
   isSupabaseConnectionError,
-  shouldUseSupabaseReadFallback,
+  readFromSupabaseWithFallback,
 } from '../../lib/supabase.js';
 import { env } from '../../config/env.js';
 import {
@@ -332,25 +332,23 @@ export async function getReviewSettings(
 ): Promise<ReviewSettings> {
   await requireAcmUser(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('review_settings')
-    .select('*')
-    .eq('id', REVIEW_SETTINGS_ID)
-    .maybeSingle();
+  return readFromSupabaseWithFallback(defaultReviewSettings(), async (supabase) => {
+    const { data, error } = await supabase
+      .from('review_settings')
+      .select('*')
+      .eq('id', REVIEW_SETTINGS_ID)
+      .maybeSingle();
 
-  if (error) {
-    if (isMissingSettingsError(error)) {
-      return defaultReviewSettings();
+    if (error) {
+      if (isMissingSettingsError(error)) {
+        return defaultReviewSettings();
+      }
+
+      throw error;
     }
 
-    if (shouldUseSupabaseReadFallback(error)) {
-      return defaultReviewSettings();
-    }
-
-    throw error;
-  }
-
-  return data ? toReviewSettings(data) : defaultReviewSettings();
+    return data ? toReviewSettings(data) : defaultReviewSettings();
+  });
 }
 
 export async function getApplicationSourceSettings(
@@ -358,27 +356,28 @@ export async function getApplicationSourceSettings(
 ): Promise<ApplicationSourceSettings> {
   await requireAcmUser(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_source_settings')
-    .select('*')
-    .eq('id', APPLICATION_SOURCE_SETTINGS_ID)
-    .maybeSingle();
+  return readFromSupabaseWithFallback(
+    defaultApplicationSourceSettings(),
+    async (supabase) => {
+      const { data, error } = await supabase
+        .from('application_source_settings')
+        .select('*')
+        .eq('id', APPLICATION_SOURCE_SETTINGS_ID)
+        .maybeSingle();
 
-  if (error) {
-    if (isMissingSettingsError(error)) {
-      return defaultApplicationSourceSettings();
-    }
+      if (error) {
+        if (isMissingSettingsError(error)) {
+          return defaultApplicationSourceSettings();
+        }
 
-    if (shouldUseSupabaseReadFallback(error)) {
-      return defaultApplicationSourceSettings();
-    }
+        throw error;
+      }
 
-    throw error;
-  }
-
-  return data
-    ? toApplicationSourceSettings(data)
-    : defaultApplicationSourceSettings();
+      return data
+        ? toApplicationSourceSettings(data)
+        : defaultApplicationSourceSettings();
+    },
+  );
 }
 
 export async function updateReviewDueDate({

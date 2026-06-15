@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { env } from '../config/env.js';
 import type { Database } from '../types/database.js';
@@ -12,13 +12,25 @@ const SUPABASE_CONNECTION_ERROR_MARKERS = [
   'econnreset',
   'etimedout',
 ];
+const MISSING_SUPABASE_ADMIN_CONFIG_CODE = 'MISSING_SUPABASE_ADMIN_CONFIG';
 
 function assertSupabaseEnv() {
   if (!env.supabaseUrl || !env.supabaseServiceRoleKey) {
-    throw new Error(
-      'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for privileged Supabase access.',
-    );
+    throw createMissingSupabaseAdminConfigError();
   }
+}
+
+function createMissingSupabaseAdminConfigError(): Error & {
+  code: string;
+  statusCode: number;
+} {
+  const error = new Error('Supabase server configuration is missing.') as Error & {
+    code: string;
+    statusCode: number;
+  };
+  error.code = MISSING_SUPABASE_ADMIN_CONFIG_CODE;
+  error.statusCode = 503;
+  return error;
 }
 
 function readStringProperty(error: object, key: string): string {
@@ -55,8 +67,20 @@ export function isSupabaseConnectionError(error: unknown): boolean {
   );
 }
 
+export function isMissingSupabaseAdminConfigError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === MISSING_SUPABASE_ADMIN_CONFIG_CODE
+  );
+}
+
 export function shouldUseSupabaseReadFallback(error: unknown): boolean {
-  return env.nodeEnv !== 'production' && isSupabaseConnectionError(error);
+  return (
+    env.nodeEnv !== 'production' &&
+    (isSupabaseConnectionError(error) ||
+      isMissingSupabaseAdminConfigError(error))
+  );
 }
 
 export function createSupabaseUnavailableError(): Error & { statusCode: number } {
@@ -76,4 +100,19 @@ export function getSupabaseAdmin() {
       persistSession: false,
     },
   });
+}
+
+export async function readFromSupabaseWithFallback<T>(
+  fallbackValue: T,
+  read: (supabase: SupabaseClient<Database>) => Promise<T>,
+): Promise<T> {
+  try {
+    return await read(getSupabaseAdmin());
+  } catch (error) {
+    if (shouldUseSupabaseReadFallback(error)) {
+      return fallbackValue;
+    }
+
+    throw error;
+  }
 }

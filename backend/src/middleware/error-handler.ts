@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import { env } from '../config/env.js';
+
 function getStatusCode(error: unknown): number {
   if (error instanceof Error && 'statusCode' in error) {
     const statusCode = (error as Error & { statusCode?: unknown }).statusCode;
@@ -30,6 +32,10 @@ export function errorHandler(
   const message =
     error instanceof Error ? error.message : 'Unexpected server error';
   const statusCode = getStatusCode(error);
+  const responseMessage =
+    env.nodeEnv === 'production' && statusCode >= 500 && !hasExplicitStatusCode(error)
+      ? 'Unexpected server error'
+      : message;
 
   if (hasExplicitStatusCode(error)) {
     const log = statusCode >= 500 ? console.error : console.warn;
@@ -39,6 +45,6 @@ export function errorHandler(
   }
 
   res.status(statusCode).json({
-    error: message,
+    error: responseMessage,
   });
 }

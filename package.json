@@ -8,9 +8,10 @@
     "dev:frontend": "vite",
     "dev:backend": "tsx watch backend/src/index.ts",
     "build": "tsc -b && vite build",
-    "build:backend": "tsc -p tsconfig.backend.json",
+    "build:backend": "tsc -b tsconfig.backend.json --force",
     "typecheck": "tsc -b --pretty false",
     "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit",
+    "test": "npm run build:backend && node --test backend/dist/modules/**/*.test.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "start:backend": "node backend/dist/index.js"

@@ -26,10 +26,6 @@ function getOptionalEnv(name: string): string | undefined {
   return value;
 }
 
-function getGoogleClientId(): string | undefined {
-  return process.env.GOOGLE_CLIENT_ID ?? process.env.VITE_GOOGLE_CLIENT_ID;
-}
-
 function parseEmailList(value: string | undefined): string[] {
   if (!value) {
     return [];
@@ -85,12 +81,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: getPort(process.env.PORT),
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173',
-  googleClientId: getGoogleClientId(),
-  googleClientSecret: getOptionalEnv('GOOGLE_CLIENT_SECRET'),
-  googleRedirectDev: process.env.GOOGLE_REDIRECT_DEV ?? 'http://localhost:5173',
-  googleRedirectProd:
-    process.env.GOOGLE_REDIRECT_PROD ?? 'https://acm-projects-app-review-tan.vercel.app',
-  supabaseUrl: getOptionalEnv('SUPABASE_URL'),
+  supabaseUrl: getOptionalEnv('SUPABASE_URL') ?? getOptionalEnv('VITE_SUPABASE_URL'),
   supabaseServiceRoleKey: getOptionalEnv('SUPABASE_SERVICE_ROLE_KEY'),
   adminEmails: parseEmailList(process.env.ADMIN_EMAILS),
   reviewerList: parseReviewerList(process.env.REVIEWER_LIST),

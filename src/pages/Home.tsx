@@ -14,6 +14,7 @@ import {
 } from '../lib/adminApi';
 import {
   completeGoogleSignInFromRedirect,
+  getGoogleAuthErrorMessage,
   getStoredGoogleProfile,
   hasStoredGoogleSession,
   hasGoogleSignInStartRequest,
@@ -223,7 +224,7 @@ export default function Home() {
         }
 
         setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to initialize Google sign-in.',
+          getGoogleAuthErrorMessage(error, 'Failed to initialize Google sign-in.'),
         );
       } finally {
         if (isMounted) {
@@ -243,7 +244,7 @@ export default function Home() {
     setErrorMessage('');
     void redirectToGoogleSignIn().catch((error: unknown) => {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to start Google sign-in.',
+        getGoogleAuthErrorMessage(error, 'Failed to start Google sign-in.'),
       );
     });
   };
@@ -271,7 +272,7 @@ export default function Home() {
       setIsAdmin(false);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to sign out from Google.',
+        getGoogleAuthErrorMessage(error, 'Failed to sign out from Google.'),
       );
     }
   };

@@ -1,15 +1,11 @@
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
+
 const GOOGLE_SCOPES =
-  'https://www.googleapis.com/auth/spreadsheets openid profile email';
+  'openid profile email https://www.googleapis.com/auth/spreadsheets';
 const GOOGLE_SESSION_STORAGE_KEY = 'google_session';
-const GOOGLE_OAUTH_STATE_STORAGE_KEY = 'google_oauth_state';
-const GOOGLE_OAUTH_START_PARAM = 'google_sign_in';
 const DEVELOPMENT_ACCESS_TOKEN = 'development-access-token';
-const GOOGLE_AUTH_TIMEOUT_MS = 10_000;
-const GOOGLE_SESSION_REVALIDATE_MS = 5 * 60_000;
 const ALLOWED_GOOGLE_EMAIL_DOMAIN = 'acmucsd.org';
 const ALLOWED_GOOGLE_EMAIL_SUFFIX = `@${ALLOWED_GOOGLE_EMAIL_DOMAIN}`;
-const DEFAULT_PRODUCTION_GOOGLE_REDIRECT_URI =
-  'https://acm-projects-app-review-tan.vercel.app';
 
 export interface GoogleProfile {
   email: string;
@@ -22,10 +18,6 @@ export interface GoogleSession {
   profile: GoogleProfile;
 }
 
-let googleRedirectCompletionPromise: Promise<GoogleSession | null> | null = null;
-let currentSession: GoogleSession | null = null;
-let lastSessionValidationAt = 0;
-
 interface GoogleApiErrorPayload {
   error?: {
     message?: string;
@@ -34,6 +26,66 @@ interface GoogleApiErrorPayload {
 
 interface GoogleSheetsValuesResponse extends GoogleApiErrorPayload {
   values?: string[][];
+}
+
+type SupabaseSessionWithProviderToken = Session & {
+  provider_token?: string | null;
+};
+
+let currentSession: GoogleSession | null = null;
+let supabaseClient: SupabaseClient | null = null;
+
+function isLocalSupabaseHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1'
+  );
+}
+
+function createGoogleSignInConfigError(detail: string): Error {
+  return new Error(`Google sign-in is misconfigured: ${detail}`);
+}
+
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return '';
+}
+
+function isHtmlJsonParseError(message: string): boolean {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    message.includes("Unexpected token '<'") ||
+    message.includes('<!DOCTYPE') ||
+    normalizedMessage.includes('not valid json')
+  );
+}
+
+export function getGoogleAuthErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+): string {
+  const message = readErrorMessage(error);
+
+  if (isHtmlJsonParseError(message)) {
+    return createGoogleSignInConfigError(
+      'Supabase Auth returned the app HTML instead of JSON. Set VITE_SUPABASE_URL to your Supabase project URL, for example https://your-project-ref.supabase.co.',
+    ).message;
+  }
+
+  return message || fallbackMessage;
+}
+
+function createGoogleSignInError(error: unknown, fallbackMessage: string): Error {
+  return new Error(getGoogleAuthErrorMessage(error, fallbackMessage));
 }
 
 export function isDevelopmentAuthEnabled(): boolean {
@@ -56,14 +108,78 @@ function assertAllowedGoogleProfile(profile: GoogleProfile) {
   }
 }
 
-function getGoogleClientId(): string {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+function getSupabaseUrl(): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 
-  if (!clientId) {
-    throw new Error('Missing VITE_GOOGLE_CLIENT_ID');
+  if (!supabaseUrl) {
+    throw createGoogleSignInConfigError(
+      'missing VITE_SUPABASE_URL. Set it to your Supabase project URL, for example https://your-project-ref.supabase.co.',
+    );
   }
 
-  return clientId;
+  if (supabaseUrl.includes('your-project-ref')) {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_URL is still the example placeholder.',
+    );
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(supabaseUrl);
+  } catch {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_URL must be an absolute URL.',
+    );
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_URL must start with http:// or https://.',
+    );
+  }
+
+  if (parsedUrl.protocol === 'http:' && !isLocalSupabaseHost(parsedUrl.hostname)) {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_URL must use https outside local development.',
+    );
+  }
+
+  if (parsedUrl.origin === window.location.origin) {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_URL points to this app instead of Supabase. Use your Supabase project URL, for example https://your-project-ref.supabase.co.',
+    );
+  }
+
+  return parsedUrl.origin;
+}
+
+function getSupabaseAnonKey(): string {
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseAnonKey) {
+    throw createGoogleSignInConfigError('missing VITE_SUPABASE_ANON_KEY.');
+  }
+
+  if (supabaseAnonKey === 'your_supabase_anon_key') {
+    throw createGoogleSignInConfigError(
+      'VITE_SUPABASE_ANON_KEY is still the example placeholder.',
+    );
+  }
+
+  return supabaseAnonKey;
+}
+
+function getSupabaseClient(): SupabaseClient {
+  supabaseClient ??= createClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+    auth: {
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      flowType: 'pkce',
+      persistSession: true,
+    },
+  });
+
+  return supabaseClient;
 }
 
 export function getApiBaseUrl(): string {
@@ -76,53 +192,16 @@ export function getApiBaseUrl(): string {
     : window.location.origin;
 }
 
-function getGoogleRedirectUri(): string {
-  const configuredRedirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI?.trim();
-
-  if (configuredRedirectUri) {
-    return configuredRedirectUri;
-  }
-
-  return window.location.hostname === 'localhost'
-    ? window.location.origin
-    : DEFAULT_PRODUCTION_GOOGLE_REDIRECT_URI;
-}
-
 export function hasGoogleSignInStartRequest(): boolean {
   const params = new URLSearchParams(window.location.search);
-  return params.get(GOOGLE_OAUTH_START_PARAM) === '1';
-}
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
 
-function consumeGoogleSignInStartRequest(): boolean {
-  if (!hasGoogleSignInStartRequest()) {
-    return false;
-  }
-
-  const url = new URL(window.location.href);
-  url.searchParams.delete(GOOGLE_OAUTH_START_PARAM);
-  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-  window.history.replaceState({}, document.title, nextUrl);
-
-  return true;
-}
-
-function getCanonicalGoogleSignInStartUrl(): string {
-  const url = new URL(getGoogleRedirectUri());
-  url.pathname = window.location.pathname;
-  url.hash = window.location.hash;
-  url.searchParams.set(GOOGLE_OAUTH_START_PARAM, '1');
-  return url.toString();
-}
-
-function setStoredSession(session: GoogleSession | null) {
-  currentSession = session;
-  lastSessionValidationAt = session ? Date.now() : 0;
-
-  if (session) {
-    localStorage.setItem(GOOGLE_SESSION_STORAGE_KEY, JSON.stringify(session));
-  } else {
-    localStorage.removeItem(GOOGLE_SESSION_STORAGE_KEY);
-  }
+  return (
+    params.has('code') ||
+    params.has('error') ||
+    hashParams.has('access_token') ||
+    hashParams.has('error')
+  );
 }
 
 function getStoredSession(): GoogleSession | null {
@@ -145,6 +224,16 @@ function getStoredSession(): GoogleSession | null {
   }
 }
 
+function setStoredSession(session: GoogleSession | null) {
+  currentSession = session;
+
+  if (session) {
+    localStorage.setItem(GOOGLE_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(GOOGLE_SESSION_STORAGE_KEY);
+  }
+}
+
 export function hasStoredGoogleSession(): boolean {
   return Boolean(getStoredSession());
 }
@@ -157,51 +246,262 @@ export function getStoredGoogleAccessToken(): string | null {
   return getStoredSession()?.accessToken ?? null;
 }
 
-function setStoredState(state: string | null) {
-  if (state) {
-    sessionStorage.setItem(GOOGLE_OAUTH_STATE_STORAGE_KEY, state);
-  } else {
-    sessionStorage.removeItem(GOOGLE_OAUTH_STATE_STORAGE_KEY);
+function readMetadataString(
+  metadata: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function getGoogleProviderToken(session: Session): string | null {
+  return (session as SupabaseSessionWithProviderToken).provider_token ?? null;
+}
+
+function toGoogleProfile(session: Session): GoogleProfile {
+  const metadata = (session.user.user_metadata ?? {}) as Record<string, unknown>;
+  const email = session.user.email ?? readMetadataString(metadata, ['email']);
+
+  return {
+    email,
+    name:
+      readMetadataString(metadata, ['full_name', 'name']) || email || 'Reviewer',
+    picture: readMetadataString(metadata, ['avatar_url', 'picture']),
+  };
+}
+
+function toGoogleSession(session: Session): GoogleSession {
+  const profile = toGoogleProfile(session);
+  assertAllowedGoogleProfile(profile);
+
+  const providerToken = getGoogleProviderToken(session);
+  if (providerToken) {
+    return {
+      accessToken: providerToken,
+      profile,
+    };
+  }
+
+  const storedSession = getStoredSession();
+  if (storedSession?.profile.email.toLowerCase() === profile.email.toLowerCase()) {
+    return storedSession;
+  }
+
+  throw new Error(
+    'Missing Google provider token. Sign out and sign in again to grant Google Sheets access.',
+  );
+}
+
+function clearAuthParamsFromUrl() {
+  const url = new URL(window.location.href);
+  [
+    'code',
+    'state',
+    'scope',
+    'authuser',
+    'prompt',
+    'error',
+    'error_code',
+    'error_description',
+    'iss',
+    'hd',
+  ].forEach((key) => url.searchParams.delete(key));
+
+  if (url.hash) {
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+    [
+      'access_token',
+      'expires_at',
+      'expires_in',
+      'provider_token',
+      'refresh_token',
+      'token_type',
+      'type',
+      'error',
+      'error_code',
+      'error_description',
+    ].forEach((key) => hashParams.delete(key));
+    url.hash = hashParams.toString();
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
+function getAuthErrorFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return (
+    params.get('error_description') ||
+    params.get('error') ||
+    hashParams.get('error_description') ||
+    hashParams.get('error')
+  );
+}
+
+function getCurrentAppRedirectUrl(): string {
+  const url = new URL(window.location.href);
+  clearAuthParams(url.searchParams);
+  url.hash = '';
+
+  if (url.pathname === '/' && !url.search) {
+    return url.origin;
+  }
+
+  return url.toString();
+}
+
+function clearAuthParams(params: URLSearchParams) {
+  [
+    'code',
+    'state',
+    'scope',
+    'authuser',
+    'prompt',
+    'error',
+    'error_code',
+    'error_description',
+    'iss',
+    'hd',
+  ].forEach((key) => params.delete(key));
+}
+
+export async function redirectToGoogleSignIn(): Promise<void> {
+  try {
+    const { error } = await getSupabaseClient().auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        queryParams: {
+          access_type: 'offline',
+          hd: ALLOWED_GOOGLE_EMAIL_DOMAIN,
+          prompt: 'consent',
+        },
+        redirectTo: getCurrentAppRedirectUrl(),
+        scopes: GOOGLE_SCOPES,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    throw createGoogleSignInError(error, 'Failed to start Google sign-in.');
   }
 }
 
-function getStoredState(): string | null {
-  return sessionStorage.getItem(GOOGLE_OAUTH_STATE_STORAGE_KEY);
-}
+async function completeGoogleSignInFromRedirectOnce(): Promise<GoogleSession | null> {
+  const authError = getAuthErrorFromUrl();
+  if (authError) {
+    clearAuthParamsFromUrl();
+    throw new Error(`Google sign-in failed: ${authError}`);
+  }
 
-async function fetchGoogleProfile(accessToken: string): Promise<GoogleProfile> {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => {
-    controller.abort();
-  }, GOOGLE_AUTH_TIMEOUT_MS);
+  const code = new URLSearchParams(window.location.search).get('code');
+  if (!code) {
+    return restoreGoogleSession();
+  }
 
-  try {
-    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      signal: controller.signal,
+  const { data, error } = await getSupabaseClient().auth.exchangeCodeForSession(code)
+    .catch((exchangeError: unknown) => {
+      throw createGoogleSignInError(
+        exchangeError,
+        'Failed to complete Google sign-in.',
+      );
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to load Google profile.');
-    }
+  clearAuthParamsFromUrl();
 
-    const data = (await response.json()) as GoogleUserInfo;
+  if (error) {
+    throw createGoogleSignInError(error, 'Failed to complete Google sign-in.');
+  }
 
-    return {
-      email: data.email ?? '',
-      name: data.name ?? '',
-      picture: data.picture ?? '',
-    };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('Google profile request timed out.');
-    }
+  if (!data.session) {
+    setStoredSession(null);
+    return null;
+  }
 
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
+  const googleSession = toGoogleSession(data.session);
+  setStoredSession(googleSession);
+  return googleSession;
+}
+
+let googleRedirectCompletionPromise: Promise<GoogleSession | null> | null = null;
+
+export function completeGoogleSignInFromRedirect(): Promise<GoogleSession | null> {
+  if (!googleRedirectCompletionPromise) {
+    googleRedirectCompletionPromise = completeGoogleSignInFromRedirectOnce().finally(
+      () => {
+        googleRedirectCompletionPromise = null;
+      },
+    );
+  }
+
+  return googleRedirectCompletionPromise;
+}
+
+export async function restoreGoogleSession(): Promise<GoogleSession | null> {
+  const storedSession = getStoredSession();
+  if (isDevelopmentAuthEnabled() && isDevelopmentSession(storedSession)) {
+    return storedSession;
+  }
+
+  const { data, error } = await getSupabaseClient().auth.getSession()
+    .catch((sessionError: unknown) => {
+      throw createGoogleSignInError(
+        sessionError,
+        'Failed to restore Google sign-in.',
+      );
+    });
+
+  if (error) {
+    setStoredSession(null);
+    throw createGoogleSignInError(error, 'Failed to restore Google sign-in.');
+  }
+
+  if (!data.session) {
+    setStoredSession(null);
+    return null;
+  }
+
+  const googleSession = toGoogleSession(data.session);
+  setStoredSession(googleSession);
+  return googleSession;
+}
+
+export function signInWithDevelopmentUser(): GoogleSession {
+  if (!isDevelopmentAuthEnabled()) {
+    throw new Error('Development sign-in is only available while running Vite locally.');
+  }
+
+  const session = {
+    accessToken: DEVELOPMENT_ACCESS_TOKEN,
+    profile: {
+      email: 'test-reviewer@acmucsd.org',
+      name: 'Test Reviewer',
+      picture: '',
+    },
+  };
+
+  setStoredSession(session);
+  return session;
+}
+
+export async function signOutFromGoogle(): Promise<void> {
+  setStoredSession(null);
+  const { error } = await getSupabaseClient().auth.signOut().catch(
+    (signOutError: unknown) => {
+      throw createGoogleSignInError(signOutError, 'Failed to sign out from Google.');
+    },
+  );
+
+  if (error) {
+    throw createGoogleSignInError(error, 'Failed to sign out from Google.');
   }
 }
 
@@ -425,200 +725,6 @@ function createSheetsRestApiClient(session: GoogleSession): GoogleApi {
       },
     },
   };
-}
-
-function clearGoogleAuthParamsFromUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.delete('code');
-  url.searchParams.delete('state');
-  url.searchParams.delete('scope');
-  url.searchParams.delete('authuser');
-  url.searchParams.delete('prompt');
-  url.searchParams.delete('error');
-  url.searchParams.delete('iss');
-  url.searchParams.delete('hd');
-  url.searchParams.delete(GOOGLE_OAUTH_START_PARAM);
-
-  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-  window.history.replaceState({}, document.title, nextUrl);
-}
-
-function buildGoogleAuthorizationUrl(state: string): string {
-  const params = new URLSearchParams({
-    client_id: getGoogleClientId(),
-    redirect_uri: getGoogleRedirectUri(),
-    response_type: 'code',
-    scope: GOOGLE_SCOPES,
-    access_type: 'online',
-    hd: ALLOWED_GOOGLE_EMAIL_DOMAIN,
-    include_granted_scopes: 'true',
-    prompt: 'consent',
-    state,
-  });
-
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-}
-
-export async function redirectToGoogleSignIn(): Promise<void> {
-  const redirectUri = getGoogleRedirectUri();
-  if (new URL(redirectUri).origin !== window.location.origin) {
-    window.location.assign(getCanonicalGoogleSignInStartUrl());
-    return;
-  }
-
-  const state = crypto.randomUUID();
-  setStoredState(state);
-  window.location.assign(buildGoogleAuthorizationUrl(state));
-}
-
-async function completeGoogleSignInFromRedirectOnce(): Promise<GoogleSession | null> {
-  const url = new URL(window.location.href);
-  const error = url.searchParams.get('error');
-  const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state');
-
-  if (error) {
-    clearGoogleAuthParamsFromUrl();
-    throw new Error(`Google sign-in failed: ${error}`);
-  }
-
-  if (!code) {
-    if (consumeGoogleSignInStartRequest()) {
-      await redirectToGoogleSignIn();
-      return null;
-    }
-
-    if (url.searchParams.has('iss') || url.searchParams.has('hd')) {
-      clearGoogleAuthParamsFromUrl();
-    }
-    return null;
-  }
-
-  const expectedState = getStoredState();
-  setStoredState(null);
-
-  if (!expectedState || !state || expectedState !== state) {
-    clearGoogleAuthParamsFromUrl();
-    throw new Error('Google sign-in state validation failed.');
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}/api/auth/google/exchange`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      code,
-      redirectUri: getGoogleRedirectUri(),
-    }),
-  });
-
-  const data = (await response.json()) as
-    | GoogleSession
-    | { error?: string };
-
-  if (!response.ok || !('accessToken' in data)) {
-    clearGoogleAuthParamsFromUrl();
-    const errorMessage =
-      'error' in data ? data.error : 'Failed to complete Google sign-in.';
-    throw new Error(errorMessage ?? 'Failed to complete Google sign-in.');
-  }
-
-  assertAllowedGoogleProfile(data.profile);
-  setStoredSession(data);
-  clearGoogleAuthParamsFromUrl();
-
-  return data;
-}
-
-export function completeGoogleSignInFromRedirect(): Promise<GoogleSession | null> {
-  if (!googleRedirectCompletionPromise) {
-    googleRedirectCompletionPromise = completeGoogleSignInFromRedirectOnce().finally(
-      () => {
-        googleRedirectCompletionPromise = null;
-      },
-    );
-  }
-
-  return googleRedirectCompletionPromise;
-}
-
-export async function restoreGoogleSession(): Promise<GoogleSession | null> {
-  const session = getStoredSession();
-  if (!session) {
-    return null;
-  }
-
-  if (
-    currentSession &&
-    lastSessionValidationAt &&
-    Date.now() - lastSessionValidationAt < GOOGLE_SESSION_REVALIDATE_MS
-  ) {
-    assertAllowedGoogleProfile(currentSession.profile);
-    return currentSession;
-  }
-
-  if (isDevelopmentSession(session) && isDevelopmentAuthEnabled()) {
-    if (isAllowedGoogleProfile(session.profile)) {
-      return session;
-    }
-
-    setStoredSession(null);
-    return null;
-  }
-
-  try {
-    const profile = await fetchGoogleProfile(session.accessToken);
-    assertAllowedGoogleProfile(profile);
-    const nextSession = {
-      accessToken: session.accessToken,
-      profile,
-    };
-
-    setStoredSession(nextSession);
-    return nextSession;
-  } catch {
-    setStoredSession(null);
-    return null;
-  }
-}
-
-export function signInWithDevelopmentUser(): GoogleSession {
-  if (!isDevelopmentAuthEnabled()) {
-    throw new Error('Development sign-in is only available while running Vite locally.');
-  }
-
-  const session = {
-    accessToken: DEVELOPMENT_ACCESS_TOKEN,
-    profile: {
-      email: 'test-reviewer@acmucsd.org',
-      name: 'Test Reviewer',
-      picture: '',
-    },
-  };
-
-  setStoredSession(session);
-  return session;
-}
-
-export async function signOutFromGoogle(): Promise<void> {
-  const session = getStoredSession();
-
-  setStoredSession(null);
-
-  if (!session) {
-    return;
-  }
-
-  await fetch('https://oauth2.googleapis.com/revoke', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      token: session.accessToken,
-    }),
-  }).catch(() => undefined);
 }
 
 export async function getGoogleApiClient(): Promise<GoogleApi> {

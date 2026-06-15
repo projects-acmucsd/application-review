@@ -3,7 +3,7 @@ import {
   createSupabaseUnavailableError,
   getSupabaseAdmin,
   isSupabaseConnectionError,
-  shouldUseSupabaseReadFallback,
+  readFromSupabaseWithFallback,
 } from '../../lib/supabase.js';
 import {
   createHttpError,
@@ -122,20 +122,18 @@ export async function listAssignments(
 ): Promise<ApplicationAssignment[]> {
   await requireAdmin(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_assignments')
-    .select('*')
-    .order('assigned_at', { ascending: false });
+  return readFromSupabaseWithFallback([], async (supabase) => {
+    const { data, error } = await supabase
+      .from('application_assignments')
+      .select('*')
+      .order('assigned_at', { ascending: false });
 
-  if (error) {
-    if (shouldUseSupabaseReadFallback(error)) {
-      return [];
+    if (error) {
+      throw error;
     }
 
-    throw error;
-  }
-
-  return (data ?? []).map(toAssignment);
+    return (data ?? []).map(toAssignment);
+  });
 }
 
 export async function listAssignmentsForReviewer(
@@ -143,21 +141,19 @@ export async function listAssignmentsForReviewer(
 ): Promise<ApplicationAssignment[]> {
   const profile = await getProfile(accessToken);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_assignments')
-    .select('*')
-    .eq('assignee_email', normalizeEmail(profile.email))
-    .order('assigned_at', { ascending: false });
+  return readFromSupabaseWithFallback([], async (supabase) => {
+    const { data, error } = await supabase
+      .from('application_assignments')
+      .select('*')
+      .eq('assignee_email', normalizeEmail(profile.email))
+      .order('assigned_at', { ascending: false });
 
-  if (error) {
-    if (shouldUseSupabaseReadFallback(error)) {
-      return [];
+    if (error) {
+      throw error;
     }
 
-    throw error;
-  }
-
-  return (data ?? []).map(toAssignment);
+    return (data ?? []).map(toAssignment);
+  });
 }
 
 export async function upsertAssignment({
