@@ -25,7 +25,7 @@ function isReviewDecision(
   );
 }
 
-function parseReviewBody(body: ReviewBody): ApplicationReviewInput {
+export function parseReviewBody(body: ReviewBody): ApplicationReviewInput {
   if (
     body.rating !== undefined &&
     typeof body.rating !== 'number' &&

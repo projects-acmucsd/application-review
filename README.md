@@ -51,3 +51,7 @@ VITE_REVIEWER_LIST=reviewer1@acmucsd.org|Reviewer One,reviewer2@acmucsd.org|Revi
 ```
 
 Leave `VITE_API_BASE_URL` unset in production unless the API is deployed on a separate origin.
+
+Leave `VITE_WS_BASE_URL` unset in production unless collaboration is served from
+a separate WebSocket-capable backend. Vercel functions do not host the local
+`/ws/collaboration` server used by `npm run dev`.

@@ -1,8 +1,11 @@
+import { type User } from '@supabase/supabase-js';
+
 import { env, type ReviewerOption } from '../../config/env.js';
 import {
   createSupabaseUnavailableError,
   getSupabaseAdmin,
   isSupabaseConnectionError,
+  isMissingSupabaseAdminConfigError,
   readFromSupabaseWithFallback,
 } from '../../lib/supabase.js';
 import {
@@ -61,13 +64,106 @@ function normalizeApplicationIds(applicationIds: string[]): string[] {
   ).filter(Boolean);
 }
 
-function assertReviewerAllowed(assigneeEmail: string) {
-  if (
-    env.reviewerList.length &&
-    !env.reviewerList.some((reviewer) => reviewer.email === assigneeEmail)
-  ) {
-    throw createHttpError(400, 'Assignee is not in REVIEWER_LIST.');
+function readMetadataString(
+  metadata: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
   }
+
+  return '';
+}
+
+export function getReviewerOptionFromAuthUser(
+  user: Pick<User, 'email' | 'user_metadata'>,
+): ReviewerOption | null {
+  const email = normalizeEmail(user.email ?? '');
+
+  if (!email.endsWith('@acmucsd.org')) {
+    return null;
+  }
+
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  return {
+    email,
+    name: readMetadataString(metadata, ['full_name', 'name']) || email,
+  };
+}
+
+export function mergeReviewerOptions(
+  configuredReviewers: ReviewerOption[],
+  authReviewers: ReviewerOption[],
+): ReviewerOption[] {
+  const reviewersByEmail = new Map<string, ReviewerOption>();
+
+  [...authReviewers, ...configuredReviewers].forEach((reviewer) => {
+    const email = normalizeEmail(reviewer.email);
+    if (!email.endsWith('@acmucsd.org')) {
+      return;
+    }
+
+    reviewersByEmail.set(email, {
+      email,
+      name: reviewer.name.trim() || email,
+    });
+  });
+
+  return Array.from(reviewersByEmail.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+async function listAuthReviewerOptions(): Promise<ReviewerOption[]> {
+  const supabase = getSupabaseAdmin();
+  const reviewers: ReviewerOption[] = [];
+  let page = 1;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    reviewers.push(
+      ...data.users
+        .map(getReviewerOptionFromAuthUser)
+        .filter((reviewer): reviewer is ReviewerOption => Boolean(reviewer)),
+    );
+
+    if (!data.nextPage) {
+      return reviewers;
+    }
+
+    page = data.nextPage;
+  }
+}
+
+async function assertReviewerAllowed(assigneeEmail: string) {
+  if (!env.reviewerList.length) {
+    return;
+  }
+
+  if (env.reviewerList.some((reviewer) => reviewer.email === assigneeEmail)) {
+    return;
+  }
+
+  const authReviewers = await listAuthReviewerOptions();
+  if (authReviewers.some((reviewer) => reviewer.email === assigneeEmail)) {
+    return;
+  }
+
+  throw createHttpError(
+    400,
+    'Assignee must be in REVIEWER_LIST or have signed in before.',
+  );
 }
 
 function toAssignment(row: AssignmentRow): ApplicationAssignment {
@@ -114,7 +210,24 @@ export async function listReviewerOptions(
   accessToken: string,
 ): Promise<ReviewerOption[]> {
   await requireAdmin(accessToken);
-  return env.reviewerList;
+
+  try {
+    return mergeReviewerOptions(env.reviewerList, await listAuthReviewerOptions());
+  } catch (error) {
+    if (
+      env.nodeEnv !== 'production' &&
+      (isMissingSupabaseAdminConfigError(error) ||
+        isSupabaseConnectionError(error))
+    ) {
+      return mergeReviewerOptions(env.reviewerList, []);
+    }
+
+    if (isSupabaseConnectionError(error)) {
+      throw createSupabaseUnavailableError();
+    }
+
+    throw error;
+  }
 }
 
 export async function listAssignments(
@@ -171,7 +284,7 @@ export async function upsertAssignment({
 
   assertApplicationId(applicationId);
   assertAcmEmail(assigneeEmail);
-  assertReviewerAllowed(assigneeEmail);
+  await assertReviewerAllowed(assigneeEmail);
 
   const { data, error } = await getSupabaseAdmin()
     .from('application_assignments')
@@ -211,7 +324,7 @@ export async function bulkAssignApplications({
   const applicationIds = normalizeApplicationIds(assignment.applicationIds);
 
   assertAcmEmail(assigneeEmail);
-  assertReviewerAllowed(assigneeEmail);
+  await assertReviewerAllowed(assigneeEmail);
 
   if (!applicationIds.length) {
     throw createHttpError(400, 'No unassigned applications were selected.');

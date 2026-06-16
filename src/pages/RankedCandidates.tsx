@@ -20,6 +20,7 @@ import {
   type SheetRow,
 } from '../lib/googleSheetData';
 import {
+  clearReviewCaches,
   listApplicationReviews,
   saveApplicationReview,
   type ApplicationReview,
@@ -211,7 +212,7 @@ export default function RankedCandidates() {
 
         const [sheetData, applicationReviews] = await Promise.all([
           loadApplicationSheetData(),
-          listApplicationReviews(),
+          listApplicationReviews({ fresh: true }),
         ]);
 
         if (!isMounted) {
@@ -250,6 +251,7 @@ export default function RankedCandidates() {
   const signOut = async () => {
     await signOutFromGoogle();
     clearCachedAdminAccess();
+    clearReviewCaches();
     setIsAdmin(false);
     navigate('/');
   };

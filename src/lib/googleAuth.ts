@@ -15,6 +15,7 @@ export interface GoogleProfile {
 
 export interface GoogleSession {
   accessToken: string;
+  expiresAt: number;
   profile: GoogleProfile;
 }
 
@@ -33,7 +34,10 @@ type SupabaseSessionWithProviderToken = Session & {
 };
 
 let currentSession: GoogleSession | null = null;
+let googleSessionRefreshPromise: Promise<GoogleSession | null> | null = null;
 let supabaseClient: SupabaseClient | null = null;
+const GOOGLE_SESSION_EXPIRY_BUFFER_MS = 5 * 60_000;
+const GOOGLE_PROVIDER_TOKEN_TTL_MS = 55 * 60_000;
 
 function isLocalSupabaseHost(hostname: string): boolean {
   return (
@@ -81,6 +85,19 @@ export function getGoogleAuthErrorMessage(
     ).message;
   }
 
+  if (
+    message.includes('Unable to exchange external code') ||
+    message.toLowerCase().includes('invalid_client')
+  ) {
+    return (
+      'Google sign-in failed because the Supabase Google OAuth client secret is invalid. ' +
+      'In Google Cloud Console, create or copy the client secret for OAuth client ' +
+      '795870890301-4pot8q7fdfnumm6vpi8au9fb61a8mght, then update it in Supabase ' +
+      '(Authentication → Providers → Google) or run `supabase config push` after setting ' +
+      'SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET.'
+    );
+  }
+
   return message || fallbackMessage;
 }
 
@@ -94,6 +111,14 @@ export function isDevelopmentAuthEnabled(): boolean {
 
 function isDevelopmentSession(session: GoogleSession | null): boolean {
   return session?.accessToken === DEVELOPMENT_ACCESS_TOKEN;
+}
+
+function isGoogleSessionFresh(session: GoogleSession | null): session is GoogleSession {
+  return Boolean(
+    session &&
+      (isDevelopmentSession(session) ||
+        session.expiresAt - Date.now() > GOOGLE_SESSION_EXPIRY_BUFFER_MS),
+  );
 }
 
 function isAllowedGoogleProfile(profile: GoogleProfile): boolean {
@@ -235,15 +260,27 @@ function setStoredSession(session: GoogleSession | null) {
 }
 
 export function hasStoredGoogleSession(): boolean {
-  return Boolean(getStoredSession());
+  return isGoogleSessionFresh(getStoredSession());
 }
 
 export function getStoredGoogleProfile(): GoogleProfile | null {
-  return getStoredSession()?.profile ?? null;
+  const session = getStoredSession();
+  return isGoogleSessionFresh(session) ? session.profile : null;
 }
 
 export function getStoredGoogleAccessToken(): string | null {
-  return getStoredSession()?.accessToken ?? null;
+  const session = getStoredSession();
+  return isGoogleSessionFresh(session) ? session.accessToken : null;
+}
+
+export async function getFreshGoogleAccessToken(): Promise<string> {
+  const session = await restoreGoogleSession();
+
+  if (!session?.accessToken) {
+    throw new Error('Missing authentication token.');
+  }
+
+  return session.accessToken;
 }
 
 function readMetadataString(
@@ -262,6 +299,12 @@ function readMetadataString(
 
 function getGoogleProviderToken(session: Session): string | null {
   return (session as SupabaseSessionWithProviderToken).provider_token ?? null;
+}
+
+function getGoogleProviderTokenExpiresAt(session: Session): number {
+  return session.expires_at
+    ? session.expires_at * 1000
+    : Date.now() + GOOGLE_PROVIDER_TOKEN_TTL_MS;
 }
 
 function toGoogleProfile(session: Session): GoogleProfile {
@@ -284,17 +327,22 @@ function toGoogleSession(session: Session): GoogleSession {
   if (providerToken) {
     return {
       accessToken: providerToken,
+      expiresAt: getGoogleProviderTokenExpiresAt(session),
       profile,
     };
   }
 
   const storedSession = getStoredSession();
-  if (storedSession?.profile.email.toLowerCase() === profile.email.toLowerCase()) {
+  if (
+    isGoogleSessionFresh(storedSession) &&
+    storedSession.profile.email.toLowerCase() === profile.email.toLowerCase()
+  ) {
     return storedSession;
   }
 
+  setStoredSession(null);
   throw new Error(
-    'Missing Google provider token. Sign out and sign in again to grant Google Sheets access.',
+    'Google Sheets access expired. Sign in again to renew Google access.',
   );
 }
 
@@ -446,8 +494,24 @@ export function completeGoogleSignInFromRedirect(): Promise<GoogleSession | null
 }
 
 export async function restoreGoogleSession(): Promise<GoogleSession | null> {
+  if (googleSessionRefreshPromise) {
+    return googleSessionRefreshPromise;
+  }
+
+  googleSessionRefreshPromise = restoreGoogleSessionOnce().finally(() => {
+    googleSessionRefreshPromise = null;
+  });
+
+  return googleSessionRefreshPromise;
+}
+
+async function restoreGoogleSessionOnce(): Promise<GoogleSession | null> {
   const storedSession = getStoredSession();
   if (isDevelopmentAuthEnabled() && isDevelopmentSession(storedSession)) {
+    return storedSession;
+  }
+
+  if (isGoogleSessionFresh(storedSession)) {
     return storedSession;
   }
 
@@ -481,6 +545,7 @@ export function signInWithDevelopmentUser(): GoogleSession {
 
   const session = {
     accessToken: DEVELOPMENT_ACCESS_TOKEN,
+    expiresAt: Number.POSITIVE_INFINITY,
     profile: {
       email: 'test-reviewer@acmucsd.org',
       name: 'Test Reviewer',
@@ -728,7 +793,7 @@ function createSheetsRestApiClient(session: GoogleSession): GoogleApi {
 }
 
 export async function getGoogleApiClient(): Promise<GoogleApi> {
-  const session = getStoredSession();
+  const session = await restoreGoogleSession();
   if (!session) {
     throw new Error('Missing Google access token.');
   }

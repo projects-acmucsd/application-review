@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import { getApiBaseUrl, getFreshGoogleAccessToken } from './googleAuth';
 
 const ADMIN_ACCESS_STORAGE_KEY = 'acm_projects_admin_access';
 const API_CACHE_TTL_MS = 5 * 60_000;
@@ -44,15 +44,9 @@ let adminAssignmentsCache: CacheEntry<ApplicationAssignment[]> | null = null;
 let myAssignmentsCache: CacheEntry<ApplicationAssignment[]> | null = null;
 let adminReviewersCache: CacheEntry<ReviewerOption[]> | null = null;
 
-function getAuthorizationHeaders() {
-  const accessToken = getStoredGoogleAccessToken();
-
-  if (!accessToken) {
-    throw new Error('Missing authentication token.');
-  }
-
+async function getAuthorizationHeaders() {
   return {
-    Authorization: `Bearer ${accessToken}`,
+    Authorization: `Bearer ${await getFreshGoogleAccessToken()}`,
   };
 }
 
@@ -143,7 +137,7 @@ export async function getAdminStatus(): Promise<AdminStatus> {
     async () =>
       readApiJson<AdminStatus>(
         await fetch(`${getApiBaseUrl()}/api/admin/me`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       ),
     (entry) => {
@@ -165,7 +159,7 @@ export async function listAdminReviewers(): Promise<ReviewerOption[]> {
     async () => {
       const result = await readApiJson<ApiDataResponse<ReviewerOption[]>>(
         await fetch(`${getApiBaseUrl()}/api/admin/reviewers`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -184,7 +178,7 @@ export async function listAdminAssignments(): Promise<ApplicationAssignment[]> {
     async () => {
       const result = await readApiJson<ApiDataResponse<ApplicationAssignment[]>>(
         await fetch(`${getApiBaseUrl()}/api/admin/assignments`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -203,7 +197,7 @@ export async function listMyAssignments(): Promise<ApplicationAssignment[]> {
     async () => {
       const result = await readApiJson<ApiDataResponse<ApplicationAssignment[]>>(
         await fetch(`${getApiBaseUrl()}/api/assignments/me`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -229,7 +223,7 @@ export async function assignApplication({
       {
         method: 'PUT',
         headers: {
-          ...getAuthorizationHeaders(),
+          ...(await getAuthorizationHeaders()),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -256,7 +250,7 @@ export async function bulkAssignApplications({
     await fetch(`${getApiBaseUrl()}/api/admin/assignments/bulk`, {
       method: 'POST',
       headers: {
-        ...getAuthorizationHeaders(),
+        ...(await getAuthorizationHeaders()),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -281,7 +275,7 @@ export async function bulkClearAssignments({
     await fetch(`${getApiBaseUrl()}/api/admin/assignments/bulk-clear`, {
       method: 'POST',
       headers: {
-        ...getAuthorizationHeaders(),
+        ...(await getAuthorizationHeaders()),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -302,7 +296,7 @@ export async function clearApplicationAssignment(
     `${getApiBaseUrl()}/api/admin/assignments/${encodeURIComponent(applicationId)}`,
     {
       method: 'DELETE',
-      headers: getAuthorizationHeaders(),
+      headers: await getAuthorizationHeaders(),
     },
   ).then(async (response) => {
     if (!response.ok) {

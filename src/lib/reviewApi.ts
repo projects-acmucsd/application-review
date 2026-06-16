@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import { getApiBaseUrl, getFreshGoogleAccessToken } from './googleAuth';
 
 const API_CACHE_TTL_MS = 5 * 60_000;
 
@@ -33,18 +33,16 @@ interface CacheEntry<T> {
   promise: Promise<T>;
 }
 
+interface ReviewReadOptions {
+  fresh?: boolean;
+}
+
 let applicationReviewsCache: CacheEntry<ApplicationReview[]> | null = null;
 let reviewStatsCache: CacheEntry<ReviewStats> | null = null;
 
-function getAuthorizationHeaders() {
-  const accessToken = getStoredGoogleAccessToken();
-
-  if (!accessToken) {
-    throw new Error('Missing authentication token.');
-  }
-
+async function getAuthorizationHeaders() {
   return {
-    Authorization: `Bearer ${accessToken}`,
+    Authorization: `Bearer ${await getFreshGoogleAccessToken()}`,
   };
 }
 
@@ -65,8 +63,9 @@ function readCached<T>(
   cache: CacheEntry<T> | null,
   loader: () => Promise<T>,
   setCache: (entry: CacheEntry<T> | null) => void,
+  options: ReviewReadOptions = {},
 ): Promise<T> {
-  if (cache && cache.expiresAt > Date.now()) {
+  if (!options.fresh && cache && cache.expiresAt > Date.now()) {
     return cache.promise;
   }
 
@@ -87,13 +86,15 @@ export function clearReviewCaches() {
   reviewStatsCache = null;
 }
 
-export async function listApplicationReviews(): Promise<ApplicationReview[]> {
+export async function listApplicationReviews(
+  options: ReviewReadOptions = {},
+): Promise<ApplicationReview[]> {
   const response = await readCached(
     applicationReviewsCache,
     async () => {
       const result = await readApiJson<ApiDataResponse<ApplicationReview[]>>(
         await fetch(`${getApiBaseUrl()}/api/reviews`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -101,6 +102,7 @@ export async function listApplicationReviews(): Promise<ApplicationReview[]> {
     (entry) => {
       applicationReviewsCache = entry;
     },
+    options,
   );
 
   return response;
@@ -119,7 +121,7 @@ export async function saveApplicationReview({
     await fetch(`${getApiBaseUrl()}/api/reviews/${encodeURIComponent(applicationId)}`, {
       method: 'PUT',
       headers: {
-        ...getAuthorizationHeaders(),
+        ...(await getAuthorizationHeaders()),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -145,13 +147,15 @@ export async function saveApplicationReview({
   return response.data;
 }
 
-export async function getReviewStats(): Promise<ReviewStats> {
+export async function getReviewStats(
+  options: ReviewReadOptions = {},
+): Promise<ReviewStats> {
   const response = await readCached(
     reviewStatsCache,
     async () => {
       const result = await readApiJson<ApiDataResponse<ReviewStats>>(
         await fetch(`${getApiBaseUrl()}/api/reviews/stats`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -159,6 +163,7 @@ export async function getReviewStats(): Promise<ReviewStats> {
     (entry) => {
       reviewStatsCache = entry;
     },
+    options,
   );
 
   return response;

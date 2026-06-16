@@ -21,6 +21,14 @@ export type SheetSectionKey = TrackKey | 'general' | 'other';
 export const REVIEWER_COMMENTS_HEADER = 'Reviewer Comments';
 
 const FALLBACK_PRIORITY_COLUMN_INDEXES = [13, 14, 15, 16];
+const LEGACY_SECTION_RANGES: Record<SheetSectionKey, { end: number; start: number }> = {
+  ai: { end: 25, start: 17 },
+  design: { end: 34, start: 25 },
+  gameDev: { end: 53, start: 47 },
+  general: { end: 17, start: 0 },
+  hack: { end: 47, start: 34 },
+  other: { end: 57, start: 53 },
+};
 const SECTION_HEADER_PREFIX_PATTERN = /^\s*\[([^\]]+)]\s*(.*)$/;
 const SHEET_DATA_CACHE_TTL_MS = 5 * 60_000;
 
@@ -96,6 +104,59 @@ export function parseSheetSectionHeader(header: string): {
 
 export function getSheetQuestionLabel(header: string): string {
   return parseSheetSectionHeader(header).question;
+}
+
+function createEmptySectionIndexes(): Record<SheetSectionKey, number[]> {
+  return {
+    ai: [],
+    design: [],
+    gameDev: [],
+    general: [],
+    hack: [],
+    other: [],
+  };
+}
+
+function getLegacySectionIndexes(
+  headersLength: number,
+): Record<SheetSectionKey, number[]> {
+  const sectionIndexes = createEmptySectionIndexes();
+
+  Object.entries(LEGACY_SECTION_RANGES).forEach(([sectionKey, range]) => {
+    const end = Math.min(headersLength, range.end);
+    for (let index = range.start; index < end; index += 1) {
+      sectionIndexes[sectionKey as SheetSectionKey].push(index);
+    }
+  });
+
+  return sectionIndexes;
+}
+
+export function getSheetSectionIndexes(
+  headers: string[],
+): Record<SheetSectionKey, number[]> {
+  const sectionIndexes = createEmptySectionIndexes();
+  const parsedHeaders = headers.map(parseSheetSectionHeader);
+  const firstPrefixedHeaderIndex = parsedHeaders.findIndex(
+    (header) => header.hasSectionPrefix,
+  );
+
+  if (firstPrefixedHeaderIndex === -1) {
+    return getLegacySectionIndexes(headers.length);
+  }
+
+  parsedHeaders.forEach((header, index) => {
+    if (header.sectionKey) {
+      sectionIndexes[header.sectionKey].push(index);
+      return;
+    }
+
+    if (index < firstPrefixedHeaderIndex) {
+      sectionIndexes.general.push(index);
+    }
+  });
+
+  return sectionIndexes;
 }
 
 export function getPriorityColumnIndexes(

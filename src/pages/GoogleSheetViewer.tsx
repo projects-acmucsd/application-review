@@ -28,17 +28,18 @@ import {
   getApplicationId,
   getPriorityColumnIndexes,
   getReviewerCommentsColumnIndex,
+  getSheetSectionIndexes,
   getSheetCellRange,
   getSheetQuestionLabel,
   clearApplicationSheetDataCache,
   loadApplicationSheetData,
   normalizeSheetTrackName,
-  parseSheetSectionHeader,
   REVIEWER_COMMENTS_HEADER,
   type SheetSectionKey,
   type SheetRow,
 } from '../lib/googleSheetData';
 import {
+  clearReviewCaches,
   listApplicationReviews,
   saveApplicationReview,
   type ApplicationReview,
@@ -152,14 +153,9 @@ const SECTION_CONFIGS: Array<{
   },
 ];
 
-const LEGACY_SECTION_RANGES: Record<SectionKey, { end: number; start: number }> = {
-  ai: { end: 25, start: 17 },
-  design: { end: 34, start: 25 },
-  gameDev: { end: 53, start: 47 },
-  general: { end: 17, start: 0 },
-  hack: { end: 47, start: 34 },
-  other: { end: 57, start: 53 },
-};
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
+  return error instanceof Error && error.message ? error.message : fallbackMessage;
+}
 
 function createReviewerIdentity(profile: GoogleProfile): ReviewerIdentity {
   const fallbackName = profile.email || 'Unknown Reviewer';
@@ -201,56 +197,6 @@ function getFirstChoicePriority(
   return firstChoice;
 }
 
-function createEmptySectionIndexes(): Record<SectionKey, number[]> {
-  return {
-    ai: [],
-    design: [],
-    gameDev: [],
-    general: [],
-    hack: [],
-    other: [],
-  };
-}
-
-function getLegacySectionIndexes(headersLength: number): Record<SectionKey, number[]> {
-  const sectionIndexes = createEmptySectionIndexes();
-
-  SECTION_CONFIGS.forEach((section) => {
-    const range = LEGACY_SECTION_RANGES[section.key];
-    const end = Math.min(headersLength, range.end);
-    for (let index = range.start; index < end; index += 1) {
-      sectionIndexes[section.key].push(index);
-    }
-  });
-
-  return sectionIndexes;
-}
-
-function getSectionIndexesFromHeaders(headers: string[]): Record<SectionKey, number[]> {
-  const sectionIndexes = createEmptySectionIndexes();
-  const parsedHeaders = headers.map(parseSheetSectionHeader);
-  const firstPrefixedHeaderIndex = parsedHeaders.findIndex(
-    (header) => header.hasSectionPrefix,
-  );
-
-  if (firstPrefixedHeaderIndex === -1) {
-    return getLegacySectionIndexes(headers.length);
-  }
-
-  parsedHeaders.forEach((header, index) => {
-    if (header.sectionKey) {
-      sectionIndexes[header.sectionKey].push(index);
-      return;
-    }
-
-    if (index < firstPrefixedHeaderIndex) {
-      sectionIndexes.general.push(index);
-    }
-  });
-
-  return sectionIndexes;
-}
-
 function getReviewerCommentValue(headers: string[], rowData: string[]): string {
   const commentColumnIndex = getReviewerCommentsColumnIndex(headers);
   return commentColumnIndex >= 0 ? rowData[commentColumnIndex] || '' : '';
@@ -269,7 +215,7 @@ function buildReviewSections({
   headers: string[];
   priorities: Partial<Record<SectionKey, number>>;
 }): ReviewSection[] {
-  const sectionIndexes = getSectionIndexesFromHeaders(headers);
+  const sectionIndexes = getSheetSectionIndexes(headers);
 
   return SECTION_CONFIGS.map((section) => {
     const indexes = sectionIndexes[section.key];
@@ -411,6 +357,9 @@ export default function GoogleSheetViewer() {
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [newData, setNewData] = useState<string[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [reviewLoadError, setReviewLoadError] = useState('');
+  const [assignmentWarning, setAssignmentWarning] = useState('');
+  const [reviewsWarning, setReviewsWarning] = useState('');
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(true);
   const [reviewsByApplicationId, setReviewsByApplicationId] = useState<
@@ -456,6 +405,7 @@ export default function GoogleSheetViewer() {
 
   const fetchSheetData = useCallback(async () => {
     setIsLoading(true);
+    setReviewLoadError('');
     try {
       const sheetData = await loadApplicationSheetData();
       setApplicationSource(sheetData.source);
@@ -463,6 +413,15 @@ export default function GoogleSheetViewer() {
       setAllRows(sheetData.rows);
     } catch (error) {
       console.error('Error loading sheet data:', error);
+      setHeaders([]);
+      setAllRows([]);
+      setApplicationSource(null);
+      setReviewLoadError(
+        `Failed to load application data. ${getErrorMessage(
+          error,
+          'Check Google Sheets access and try again.',
+        )}`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -470,6 +429,7 @@ export default function GoogleSheetViewer() {
 
   const fetchAssignments = useCallback(async () => {
     setIsAssignmentsLoading(true);
+    setAssignmentWarning('');
     try {
       const nextAssignments = await listMyAssignments();
       setAssignments(nextAssignments);
@@ -478,14 +438,21 @@ export default function GoogleSheetViewer() {
       console.error('Error loading assignments:', error);
       setAssignments([]);
       setAssignmentFallbackEnabled(true);
+      setAssignmentWarning(
+        `Assignment data could not be loaded. ${getErrorMessage(
+          error,
+          'Assigned-to-me counts may be incomplete.',
+        )}`,
+      );
     } finally {
       setIsAssignmentsLoading(false);
     }
   }, []);
 
   const fetchApplicationReviews = useCallback(async () => {
+    setReviewsWarning('');
     try {
-      const reviews = await listApplicationReviews();
+      const reviews = await listApplicationReviews({ fresh: true });
       setReviewsByApplicationId(
         Object.fromEntries(
           reviews.map((review) => [review.applicationId, review]),
@@ -494,6 +461,12 @@ export default function GoogleSheetViewer() {
     } catch (error) {
       console.error('Error loading application reviews:', error);
       setReviewsByApplicationId({});
+      setReviewsWarning(
+        `Saved ratings and decisions could not be loaded. ${getErrorMessage(
+          error,
+          'Do not rely on displayed review state until this is resolved.',
+        )}`,
+      );
     }
   }, []);
 
@@ -654,6 +627,12 @@ export default function GoogleSheetViewer() {
         }
       } catch (err) {
         console.error('Auto-refresh error:', err);
+        setAssignmentWarning(
+          `Application auto-refresh failed. ${getErrorMessage(
+            err,
+            'Refresh the page before making review decisions.',
+          )}`,
+        );
       }
     }, REFRESH_INTERVAL);
 
@@ -771,6 +750,13 @@ export default function GoogleSheetViewer() {
     }
 
     const socket = createCollaborationSocket();
+    if (!socket) {
+      collaborationSocket.current = null;
+      setCollaborationStatus('idle');
+      setCollaborationReviewers([]);
+      return;
+    }
+
     let isActiveSocket = true;
     collaborationSocket.current = socket;
     setCollaborationStatus('connecting');
@@ -995,6 +981,7 @@ export default function GoogleSheetViewer() {
   const signOut = async () => {
     await signOutFromGoogle();
     clearCachedAdminAccess();
+    clearReviewCaches();
     setIsAdmin(false);
     navigate('/');
   };
@@ -1068,8 +1055,12 @@ export default function GoogleSheetViewer() {
   const isReviewLoading =
     (isLoading || isAssignmentScopedLoading) &&
     (!headers.length || !currentRow.length);
+  const reviewDataWarning = [assignmentWarning, reviewsWarning]
+    .filter(Boolean)
+    .join(' ');
+  const hasReviewLoadError = Boolean(reviewLoadError);
   const hasEmptyFilteredQueue =
-    !isReviewLoading && !filteredRows.length;
+    !hasReviewLoadError && !isReviewLoading && !filteredRows.length;
   const emptyQueueTitle =
     activeQueueFilter === 'assignedToMe'
       ? 'N/A'
@@ -1159,9 +1150,34 @@ export default function GoogleSheetViewer() {
             </section>
           ) : null}
 
+          {reviewDataWarning && !hasReviewLoadError ? (
+            <p className="portal-square-field mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              {reviewDataWarning}
+            </p>
+          ) : null}
+
           <div className={isReviewLoading ? '' : 'mt-7'}>
             {isReviewLoading ? (
               <ReviewSummarySkeleton />
+            ) : hasReviewLoadError ? (
+              <section className="portal-surface-quiet p-8 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                  Application review
+                </p>
+                <h1 className="mt-3 text-4xl font-medium text-[#2f3138]">
+                  Unable to load applications
+                </h1>
+                <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-500">
+                  {reviewLoadError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void fetchSheetData()}
+                  className="portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-base font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                >
+                  Retry
+                </button>
+              </section>
             ) : hasEmptyFilteredQueue ? (
               <section className="portal-surface-quiet p-8 text-center">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
@@ -1288,7 +1304,7 @@ export default function GoogleSheetViewer() {
             )}
           </div>
 
-          {!hasEmptyFilteredQueue ? (
+          {!hasReviewLoadError && !hasEmptyFilteredQueue ? (
           <div className="mt-7">
             <section className="min-w-0 space-y-7">
               {isReviewLoading ? (

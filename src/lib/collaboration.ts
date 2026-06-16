@@ -74,7 +74,7 @@ export type CollaborationServerMessage =
       updatedAt: string;
     };
 
-function getWebSocketBaseUrl(): string {
+function getWebSocketBaseUrl(): string | null {
   if (import.meta.env.VITE_WS_BASE_URL) {
     return import.meta.env.VITE_WS_BASE_URL.replace(/\/$/, '');
   }
@@ -90,12 +90,13 @@ function getWebSocketBaseUrl(): string {
     return 'ws://localhost:4000';
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}`;
+  return null;
 }
 
-export function createCollaborationSocket(): WebSocket {
-  return new WebSocket(`${getWebSocketBaseUrl()}/ws/collaboration`);
+export function createCollaborationSocket(): WebSocket | null {
+  const baseUrl = getWebSocketBaseUrl();
+
+  return baseUrl ? new WebSocket(`${baseUrl}/ws/collaboration`) : null;
 }
 
 export function parseCollaborationMessage(

@@ -11,7 +11,9 @@
     "build:backend": "tsc -b tsconfig.backend.json --force",
     "typecheck": "tsc -b --pretty false",
     "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit",
-    "test": "npm run build:backend && node --test backend/dist/modules/**/*.test.js",
+    "test": "npm run test:backend && npm run test:sheet",
+    "test:backend": "npm run build:backend && node --test backend/dist/modules/**/*.test.js",
+    "test:sheet": "tsx --test tests/googleSheetData.test.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "start:backend": "node backend/dist/index.js"

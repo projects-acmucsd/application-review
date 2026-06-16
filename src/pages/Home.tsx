@@ -31,9 +31,9 @@ import {
   listApplicationReviews,
   type ReviewStats,
 } from '../lib/reviewApi';
+import { getDefaultReviewDueDate } from '../lib/reviewDefaults';
 import { getReviewSettings } from '../lib/settingsApi';
 
-const DEFAULT_REVIEW_DUE_DATE = '2026-05-03';
 const DEFAULT_REVIEW_STATS: ReviewStats = {
   totalDecisions: 0,
   accepted: 0,
@@ -141,7 +141,7 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isAdmin, setIsAdmin] = useState(() => hasCachedAdminAccess());
   const [reviewDueDateValue, setReviewDueDateValue] = useState(
-    DEFAULT_REVIEW_DUE_DATE,
+    () => getDefaultReviewDueDate(),
   );
   const [reviewStats, setReviewStats] =
     useState<ReviewStats>(DEFAULT_REVIEW_STATS);
@@ -152,7 +152,7 @@ export default function Home() {
     void Promise.allSettled([
       loadApplicationSheetData(),
       listMyAssignments(),
-      listApplicationReviews(),
+      listApplicationReviews({ fresh: true }),
     ]);
     void getReviewSettings()
       .then((settings) => {
@@ -162,10 +162,10 @@ export default function Home() {
       })
       .catch(() => {
         if (isMounted()) {
-          setReviewDueDateValue(DEFAULT_REVIEW_DUE_DATE);
+          setReviewDueDateValue(getDefaultReviewDueDate());
         }
       });
-    void getReviewStats()
+    void getReviewStats({ fresh: true })
       .then((stats) => {
         if (isMounted()) {
           setReviewStats(stats);
@@ -226,6 +226,11 @@ export default function Home() {
         setErrorMessage(
           getGoogleAuthErrorMessage(error, 'Failed to initialize Google sign-in.'),
         );
+        setIsSignedIn(false);
+        setUserName('');
+        clearCachedAdminAccess();
+        setIsAdmin(false);
+        setReviewStats(DEFAULT_REVIEW_STATS);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -269,6 +274,7 @@ export default function Home() {
       setUserName('');
       setReviewStats(DEFAULT_REVIEW_STATS);
       clearCachedAdminAccess();
+      clearReviewCaches();
       setIsAdmin(false);
     } catch (error) {
       setErrorMessage(
@@ -332,7 +338,6 @@ export default function Home() {
     </div>
   );
 
-  const firstName = userName.trim().split(/\s+/)[0] || 'Reviewer';
   const today = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
@@ -389,8 +394,7 @@ export default function Home() {
               <div>
                 <p className="text-sm font-semibold text-[#333]">{today}</p>
                 <h1 className="mt-6 max-w-4xl text-4xl font-medium leading-[1.08] text-[#2f3138] sm:text-5xl xl:text-6xl">
-                  Welcome to the Projects Review Portal,
-                  <span className="block">{firstName}</span>
+                  Welcome to the Review Portal
                 </h1>
                 <p className="mt-6 max-w-2xl text-base font-medium leading-7 text-neutral-500">
                   Get to reviewing the applications lil bro

@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getStoredGoogleAccessToken } from './googleAuth';
+import { getApiBaseUrl, getFreshGoogleAccessToken } from './googleAuth';
 
 const API_CACHE_TTL_MS = 5 * 60_000;
 
@@ -40,15 +40,9 @@ let reviewSettingsCache: CacheEntry<ReviewSettings> | null = null;
 let applicationSourceSettingsCache: CacheEntry<ApplicationSourceSettings> | null =
   null;
 
-function getAuthorizationHeaders() {
-  const accessToken = getStoredGoogleAccessToken();
-
-  if (!accessToken) {
-    throw new Error('Missing authentication token.');
-  }
-
+async function getAuthorizationHeaders() {
   return {
-    Authorization: `Bearer ${accessToken}`,
+    Authorization: `Bearer ${await getFreshGoogleAccessToken()}`,
   };
 }
 
@@ -92,7 +86,7 @@ export async function getReviewSettings(): Promise<ReviewSettings> {
     async () => {
       const result = await readApiJson<ApiDataResponse<ReviewSettings>>(
         await fetch(`${getApiBaseUrl()}/api/settings/review`, {
-          headers: getAuthorizationHeaders(),
+          headers: await getAuthorizationHeaders(),
         }),
       );
       return result.data;
@@ -112,7 +106,7 @@ export async function getApplicationSourceSettings(): Promise<ApplicationSourceS
       const result =
         await readApiJson<ApiDataResponse<ApplicationSourceSettings>>(
           await fetch(`${getApiBaseUrl()}/api/settings/application-source`, {
-            headers: getAuthorizationHeaders(),
+            headers: await getAuthorizationHeaders(),
           }),
         );
       return result.data;
@@ -132,7 +126,7 @@ export async function updateReviewDueDate(
     await fetch(`${getApiBaseUrl()}/api/admin/settings/review`, {
       method: 'PUT',
       headers: {
-        ...getAuthorizationHeaders(),
+        ...(await getAuthorizationHeaders()),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ dueDate }),
@@ -153,7 +147,7 @@ export async function updateApplicationSourceSettings(
     await fetch(`${getApiBaseUrl()}/api/admin/settings/application-source`, {
       method: 'PUT',
       headers: {
-        ...getAuthorizationHeaders(),
+        ...(await getAuthorizationHeaders()),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(input),

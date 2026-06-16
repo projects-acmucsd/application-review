@@ -41,12 +41,12 @@ import {
   updateReviewDueDate,
   type ApplicationSourceSettings,
 } from '../lib/settingsApi';
+import { getDefaultReviewDueDate } from '../lib/reviewDefaults';
 
 type TrackFilter = 'all' | 'ai' | 'design' | 'gameDev' | 'hack';
 type AllocationAction = 'assign' | 'unassign';
 
 const APPLICANTS_PER_PAGE = 10;
-const DEFAULT_REVIEW_DUE_DATE = '2026-05-03';
 const DEFAULT_APPLICATION_SHEET_NAME = 'Form Responses 1';
 
 const TRACK_FILTERS: Array<{ key: TrackFilter; label: string }> = [
@@ -147,7 +147,7 @@ export default function Admin() {
   const [isBulkAssigning, setIsBulkAssigning] = useState(false);
   const [assigningApplicationId, setAssigningApplicationId] = useState('');
   const [reviewDueDateInput, setReviewDueDateInput] = useState(
-    DEFAULT_REVIEW_DUE_DATE,
+    () => getDefaultReviewDueDate(),
   );
   const [reviewDueDateUpdatedAt, setReviewDueDateUpdatedAt] = useState('');
   const [isSavingReviewDueDate, setIsSavingReviewDueDate] = useState(false);
@@ -254,6 +254,7 @@ export default function Admin() {
   const signOut = async () => {
     await signOutFromGoogle();
     clearCachedAdminAccess();
+    clearReviewCaches();
     navigate('/');
   };
 
@@ -1020,8 +1021,9 @@ export default function Admin() {
               </>
             ) : (
               <div className="mt-6 bg-neutral-50 p-6 text-sm font-semibold text-neutral-500">
-                Add reviewers to `REVIEWER_LIST` or `VITE_REVIEWER_LIST` to
-                enable assignment controls.
+                Ask reviewers to sign in once, or add reviewers to
+                `REVIEWER_LIST` / `VITE_REVIEWER_LIST`, to enable assignment
+                controls.
               </div>
             )}
           </section>

@@ -20,7 +20,7 @@ type ApplicationSourceSettingsRow =
 const REVIEW_SETTINGS_ID = 'default';
 const APPLICATION_SOURCE_SETTINGS_ID = 'default';
 const DEVELOPMENT_ACCESS_TOKEN = 'development-access-token';
-export const DEFAULT_REVIEW_DUE_DATE = '2026-05-03';
+const DEFAULT_REVIEW_DUE_DATE_OFFSET_DAYS = 14;
 export const DEFAULT_APPLICATION_SPREADSHEET_ID =
   '1lJSS8R-SuGULx3ATWucr9k7FgK_4gmr4E4gUwsUddAY';
 export const DEFAULT_APPLICATION_SHEET_NAME = 'Form Responses 1';
@@ -74,6 +74,18 @@ function toReviewSettings(row: ReviewSettingsRow): ReviewSettings {
   };
 }
 
+export function getDefaultReviewDueDate(referenceDate = new Date()): string {
+  return new Date(
+    Date.UTC(
+      referenceDate.getUTCFullYear(),
+      referenceDate.getUTCMonth(),
+      referenceDate.getUTCDate() + DEFAULT_REVIEW_DUE_DATE_OFFSET_DAYS,
+    ),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 function toApplicationSourceSettings(
   row: ApplicationSourceSettingsRow,
 ): ApplicationSourceSettings {
@@ -89,7 +101,7 @@ function toApplicationSourceSettings(
 
 function defaultReviewSettings(): ReviewSettings {
   return {
-    dueDate: DEFAULT_REVIEW_DUE_DATE,
+    dueDate: getDefaultReviewDueDate(),
     updatedByEmail: 'system@acmucsd.org',
     updatedAt: new Date(0).toISOString(),
   };
