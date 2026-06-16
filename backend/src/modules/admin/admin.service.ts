@@ -138,11 +138,13 @@ async function listAuthReviewerOptions(): Promise<ReviewerOption[]> {
         .filter((reviewer): reviewer is ReviewerOption => Boolean(reviewer)),
     );
 
-    if (!data.nextPage) {
+    const nextPage = 'nextPage' in data ? data.nextPage : null;
+
+    if (!nextPage) {
       return reviewers;
     }
 
-    page = data.nextPage;
+    page = nextPage;
   }
 }
 
