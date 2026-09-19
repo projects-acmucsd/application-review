@@ -1,1 +1,1 @@
-__LOAD_FROM__/workspace/acm-robotics/GSV_ONLY.txt
+file:///workspace/acm-robotics/GSV_ONLY.txt
