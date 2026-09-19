@@ -584,7 +584,7 @@ function createMockSheetRows(): string[][] {
   row[13] = 'AI';
   row[14] = 'Design';
   row[15] = 'Hack';
-  row[16] = 'Game Dev';
+  row[16] = 'Robotics';
   row[row.length - 1] = '';
 
   const secondRow = Array.from(
@@ -595,7 +595,7 @@ function createMockSheetRows(): string[][] {
   secondRow[13] = 'Design';
   secondRow[14] = 'Hack';
   secondRow[15] = 'AI';
-  secondRow[16] = 'Game Dev';
+  secondRow[16] = 'Robotics';
   secondRow[secondRow.length - 1] = '';
 
   return [headers, row, secondRow];
