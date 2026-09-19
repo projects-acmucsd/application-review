@@ -43,7 +43,7 @@ test('parses section-prefixed headers into the review sections the UI renders', 
     '[AI] ML experience',
     '[Design] Portfolio',
     '[Hack] Hackathon experience',
-    '[Game Dev] Engine experience',
+    '[Robotics] Robotics experience',
     '[Other] Anything else?',
     REVIEWER_COMMENTS_HEADER,
   ];
@@ -53,11 +53,11 @@ test('parses section-prefixed headers into the review sections the UI renders', 
     question: 'ML experience',
     sectionKey: 'ai',
   });
-  assert.equal(getSheetQuestionLabel('[Game Dev] Engine experience'), 'Engine experience');
+  assert.equal(getSheetQuestionLabel('[Robotics] Robotics experience'), 'Robotics experience');
   assert.deepEqual(getSheetSectionIndexes(headers), {
     ai: [4],
     design: [5],
-    gameDev: [7],
+    robotics: [7],
     general: [0, 1, 2, 3],
     hack: [6],
     other: [8],
@@ -77,7 +77,7 @@ test('falls back to legacy column groups when headers do not have section prefix
     {
       ai: 8,
       design: 9,
-      gameDev: 6,
+      robotics: 6,
       general: 17,
       hack: 13,
       other: 4,
@@ -100,7 +100,7 @@ test('detects priority columns, first-choice track, and reviewer comments reliab
     '2026-06-16',
     'applicant@example.com',
     'Test Applicant',
-    'Game Development',
+    'Robotics',
     'AI',
     'Design',
     'Hack',
@@ -113,7 +113,20 @@ test('detects priority columns, first-choice track, and reviewer comments reliab
     { index: 5, priority: 3 },
     { index: 6, priority: 4 },
   ]);
-  assert.equal(getFirstChoiceTrack(headers, row), 'gameDev');
-  assert.equal(normalizeSheetTrackName('Game Development'), 'gameDev');
+  assert.equal(getFirstChoiceTrack(headers, row), 'robotics');
+  assert.equal(normalizeSheetTrackName('Robotics'), 'robotics');
   assert.equal(getReviewerCommentsColumnIndex(headers), 7);
+});
+
+test('maps legacy Game Dev names and section headers to Robotics', () => {
+  for (const name of ['Game Dev', 'gamedev', 'Game Development', 'game']) {
+    assert.equal(normalizeSheetTrackName(name), 'robotics');
+    assert.equal(getFirstChoiceTrack(['First Choice'], [name]), 'robotics');
+    assert.deepEqual(parseSheetSectionHeader(`[${name}] Engine experience`), {
+      hasSectionPrefix: true,
+      question: 'Engine experience',
+      sectionKey: 'robotics',
+    });
+    assert.deepEqual(getSheetSectionIndexes([`[${name}] Engine experience`]).robotics, [0]);
+  }
 });
