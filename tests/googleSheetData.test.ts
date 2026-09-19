@@ -118,15 +118,16 @@ test('detects priority columns, first-choice track, and reviewer comments reliab
   assert.equal(getReviewerCommentsColumnIndex(headers), 7);
 });
 
-test('maps legacy Game Dev names and section headers to Robotics', () => {
-  for (const name of ['Game Dev', 'gamedev', 'Game Development', 'game']) {
-    assert.equal(normalizeSheetTrackName(name), 'robotics');
-    assert.equal(getFirstChoiceTrack(['First Choice'], [name]), 'robotics');
+test('returns null for unsupported tracks instead of mapping them to Robotics', () => {
+  for (const name of ['Game Dev', 'gamedev', 'Game Development', 'game', 'robot', 'unknown', '']) {
+    assert.equal(normalizeSheetTrackName(name), null);
+    assert.equal(getFirstChoiceTrack(['First Choice'], [name]), null);
+  }
+  for (const name of ['Game Dev', 'Game Development']) {
     assert.deepEqual(parseSheetSectionHeader(`[${name}] Engine experience`), {
-      hasSectionPrefix: true,
+      hasSectionPrefix: false,
       question: 'Engine experience',
-      sectionKey: 'robotics',
+      sectionKey: null,
     });
-    assert.deepEqual(getSheetSectionIndexes([`[${name}] Engine experience`]).robotics, [0]);
   }
 });

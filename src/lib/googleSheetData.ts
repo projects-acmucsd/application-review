@@ -62,17 +62,7 @@ export function normalizeSheetTrackName(value: string): TrackKey | null {
   if (normalized === 'ai') return 'ai';
   if (normalized === 'design') return 'design';
   if (normalized === 'hack') return 'hack';
-  if (
-    [
-      'gamedev',
-      'gamedevelopment',
-      'game',
-      'robotics',
-      'robot',
-    ].includes(normalized)
-  ) {
-    return 'robotics';
-  }
+  if (normalized === 'robotics') return 'robotics';
 
   return null;
 }
