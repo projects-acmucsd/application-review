@@ -1,1 +1,1 @@
-__LOAD_FROM__/workspace/acm-robotics/src/pages/Admin.tsx
+PLACEHOLDER_WILL_REPLACE
