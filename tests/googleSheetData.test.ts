@@ -131,3 +131,45 @@ test('returns null for unsupported tracks instead of mapping them to Robotics', 
     });
   }
 });
+
+test('renders the full Robotics form without treating sub-team choices as track priorities', async () => {
+  const { createMockSheetRows } = await import('../src/lib/developmentSheetData.ts');
+  const [headers, firstApplicant, roboticsApplicant] = createMockSheetRows();
+  const sections = getSheetSectionIndexes(headers);
+
+  assert.equal(sections.robotics.length, 11);
+  assert.equal(sections.general.length, 17);
+  assert.equal(sections.ai.length, 8);
+  assert.equal(sections.design.length, 9);
+  assert.equal(sections.hack.length, 13);
+  assert.equal(sections.other.length, 4);
+  assert.equal(firstApplicant.length, headers.length);
+  assert.equal(roboticsApplicant.length, headers.length);
+  assert.deepEqual(getPriorityColumnIndexes(headers), [
+    { index: 13, priority: 1 },
+    { index: 14, priority: 2 },
+    { index: 15, priority: 3 },
+    { index: 16, priority: 4 },
+  ]);
+  assert.equal(getFirstChoiceTrack(headers, roboticsApplicant), 'robotics');
+  assert.equal(getFirstChoiceTrack(headers, firstApplicant), 'ai');
+  assert.equal(roboticsApplicant[sections.robotics[2]], 'Mechanical Engineer');
+  assert.equal(roboticsApplicant[sections.robotics[3]], 'Embedded Engineer');
+  assert.equal(
+    getSheetQuestionLabel(headers[sections.robotics.at(-1)!]),
+    'Any Comments, Questions, Concerns?',
+  );
+  assert.equal(getReviewerCommentsColumnIndex(headers), headers.length - 1);
+});
+
+test('track-specific first-choice questions do not override legacy track columns', () => {
+  const headers = Array.from({ length: 20 }, (_, index) => `Question ${index + 1}`);
+  headers[17] = '[Robotics] Which sub-team role are you most interested in? [First Choice]';
+  headers[18] = '[Robotics] Why are you interested in your first choice?';
+  assert.deepEqual(getPriorityColumnIndexes(headers), [
+    { index: 13, priority: 1 },
+    { index: 14, priority: 2 },
+    { index: 15, priority: 3 },
+    { index: 16, priority: 4 },
+  ]);
+});

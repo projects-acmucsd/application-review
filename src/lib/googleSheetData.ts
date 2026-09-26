@@ -169,6 +169,10 @@ export function getPriorityColumnIndexes(
 
   const detectedColumns = headers
     .map((header, index) => {
+      // Sub-team choices inside track questions are not overall track rankings.
+      const { sectionKey } = parseSheetSectionHeader(header);
+      if (sectionKey && sectionKey !== 'general') return null;
+
       const match = /\b(first|second|third|fourth)\s+(?:choice|priority)\b/i.exec(
         header,
       );
