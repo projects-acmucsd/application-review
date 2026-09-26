@@ -43,7 +43,7 @@ import {
 } from '../lib/settingsApi';
 import { getDefaultReviewDueDate } from '../lib/reviewDefaults';
 
-type TrackFilter = 'all' | 'ai' | 'design' | 'gameDev' | 'hack';
+type TrackFilter = 'all' | 'ai' | 'design' | 'hack' | 'robotics';
 type AllocationAction = 'assign' | 'unassign';
 
 const APPLICANTS_PER_PAGE = 10;
@@ -54,13 +54,13 @@ const TRACK_FILTERS: Array<{ key: TrackFilter; label: string }> = [
   { key: 'ai', label: 'AI' },
   { key: 'design', label: 'Design' },
   { key: 'hack', label: 'Hack' },
-  { key: 'gameDev', label: 'Game Dev' },
+  { key: 'robotics', label: 'Robotics' },
 ];
 
 function getTrackLabel(track: TrackFilter | null): string {
   if (track === 'ai') return 'AI';
   if (track === 'design') return 'Design';
-  if (track === 'gameDev') return 'Game Dev';
+  if (track === 'robotics') return 'Robotics';
   if (track === 'hack') return 'Hack';
 
   return 'Unspecified';

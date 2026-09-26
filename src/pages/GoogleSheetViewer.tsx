@@ -75,7 +75,7 @@ type QueueFilterKey =
   | 'ai'
   | 'assignedToMe'
   | 'design'
-  | 'gameDev'
+  | 'robotics'
   | 'hack';
 
 interface ReviewSection {
@@ -98,7 +98,7 @@ const QUEUE_FILTERS: Array<{
   { key: 'ai', label: 'AI priority' },
   { key: 'design', label: 'Design priority' },
   { key: 'hack', label: 'Hack priority' },
-  { key: 'gameDev', label: 'Game Dev priority' },
+  { key: 'robotics', label: 'Robotics priority' },
   { key: 'assignedToMe', label: 'Assigned to me' },
 ];
 
@@ -139,10 +139,10 @@ const SECTION_CONFIGS: Array<{
   },
   {
     accent: 'bg-[#f9a857]',
-    id: 'section-game-dev',
-    key: 'gameDev',
+    id: 'section-robotics',
+    key: 'robotics',
     priorityScoped: true,
-    title: 'Game Dev',
+    title: 'Robotics',
   },
   {
     accent: 'bg-[#ff6f6f]',
@@ -169,10 +169,8 @@ function createReviewerIdentity(profile: GoogleProfile): ReviewerIdentity {
 function normalizeTrackName(value: string): QueueFilterKey | null {
   const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');
 
-  if (normalized === 'ai') return 'ai';
-  if (normalized === 'design') return 'design';
-  if (normalized === 'hack') return 'hack';
-  if (normalized === 'gamedev') return 'gameDev';
+  const track = normalizeSheetTrackName(value);
+  if (track) return track;
   if (normalized === 'assignedtome' || normalized === 'mine') {
     return 'assignedToMe';
   }

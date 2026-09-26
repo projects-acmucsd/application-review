@@ -15,7 +15,7 @@ export interface ApplicationSheetData {
   source: ApplicationSourceSettings;
 }
 
-export type TrackKey = 'ai' | 'design' | 'gameDev' | 'hack';
+export type TrackKey = 'ai' | 'design' | 'hack' | 'robotics';
 export type SheetSectionKey = TrackKey | 'general' | 'other';
 
 export const REVIEWER_COMMENTS_HEADER = 'Reviewer Comments';
@@ -24,7 +24,7 @@ const FALLBACK_PRIORITY_COLUMN_INDEXES = [13, 14, 15, 16];
 const LEGACY_SECTION_RANGES: Record<SheetSectionKey, { end: number; start: number }> = {
   ai: { end: 25, start: 17 },
   design: { end: 34, start: 25 },
-  gameDev: { end: 53, start: 47 },
+  robotics: { end: 53, start: 47 },
   general: { end: 17, start: 0 },
   hack: { end: 47, start: 34 },
   other: { end: 57, start: 53 },
@@ -62,9 +62,7 @@ export function normalizeSheetTrackName(value: string): TrackKey | null {
   if (normalized === 'ai') return 'ai';
   if (normalized === 'design') return 'design';
   if (normalized === 'hack') return 'hack';
-  if (['gamedev', 'gamedevelopment', 'game'].includes(normalized)) {
-    return 'gameDev';
-  }
+  if (normalized === 'robotics') return 'robotics';
 
   return null;
 }
@@ -110,7 +108,7 @@ function createEmptySectionIndexes(): Record<SheetSectionKey, number[]> {
   return {
     ai: [],
     design: [],
-    gameDev: [],
+    robotics: [],
     general: [],
     hack: [],
     other: [],
@@ -171,6 +169,10 @@ export function getPriorityColumnIndexes(
 
   const detectedColumns = headers
     .map((header, index) => {
+      // Sub-team choices inside track questions are not overall track rankings.
+      const { sectionKey } = parseSheetSectionHeader(header);
+      if (sectionKey && sectionKey !== 'general') return null;
+
       const match = /\b(first|second|third|fourth)\s+(?:choice|priority)\b/i.exec(
         header,
       );

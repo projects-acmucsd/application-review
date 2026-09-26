@@ -1,3 +1,4 @@
+import { createMockSheetRows } from './developmentSheetData';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 
 const GOOGLE_SCOPES =
@@ -570,36 +571,6 @@ export async function signOutFromGoogle(): Promise<void> {
   }
 }
 
-function createMockSheetRows(): string[][] {
-  const headers = Array.from({ length: 60 }, (_, index) => `Question ${index + 1}`);
-  headers[2] = 'Applicant Name';
-  headers[13] = 'First Priority';
-  headers[14] = 'Second Priority';
-  headers[15] = 'Third Priority';
-  headers[16] = 'Fourth Priority';
-  headers[headers.length - 1] = 'Reviewer Comments';
-
-  const row = Array.from({ length: 60 }, (_, index) => `Sample response ${index + 1}`);
-  row[2] = 'Test Applicant';
-  row[13] = 'AI';
-  row[14] = 'Design';
-  row[15] = 'Hack';
-  row[16] = 'Game Dev';
-  row[row.length - 1] = '';
-
-  const secondRow = Array.from(
-    { length: 60 },
-    (_, index) => `Second fake application response ${index + 1}`,
-  );
-  secondRow[2] = 'Second Test Applicant';
-  secondRow[13] = 'Design';
-  secondRow[14] = 'Hack';
-  secondRow[15] = 'AI';
-  secondRow[16] = 'Game Dev';
-  secondRow[secondRow.length - 1] = '';
-
-  return [headers, row, secondRow];
-}
 
 let mockSheetRows: string[][] | null = null;
 
