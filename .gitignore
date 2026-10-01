@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Vercel project settings and generated deployment artifacts
+.vercel/
