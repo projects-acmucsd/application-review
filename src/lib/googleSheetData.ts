@@ -29,7 +29,8 @@ const LEGACY_SECTION_RANGES: Record<SheetSectionKey, { end: number; start: numbe
   hack: { end: 47, start: 34 },
   other: { end: 57, start: 53 },
 };
-const SECTION_HEADER_PREFIX_PATTERN = /^\s*\[([^\]]+)]\s*(.*)$/;
+// Google Form question headers can include multiline project descriptions.
+const SECTION_HEADER_PREFIX_PATTERN = /^\s*\[([^\]]+)]\s*(.*)$/s;
 const SHEET_DATA_CACHE_TTL_MS = 5 * 60_000;
 
 interface SheetDataCacheEntry {
