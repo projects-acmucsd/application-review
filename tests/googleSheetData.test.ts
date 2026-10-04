@@ -85,6 +85,40 @@ test('falls back to legacy column groups when headers do not have section prefix
   );
 });
 
+const clearMedQuestion = `This quarter we are offering a predetermined project topic. Would you like to be considered for this idea?
+
+ClearMed: Making Hospital Paperwork Readable
+Most hospital paperwork, like discharge instructions and lab results, is written for doctors, not patients, and it's confusing enough that people miss doses or skip follow-ups because of it. ClearMed is a small team project where each person builds one piece of a pipeline that rewrites clinical text into plain language and checks it against the original so nothing gets made up. We're exploring whether making the pipeline more complex, splitting the work across several focused steps, can actually outperform one AI doing the entire rewrite at once. You'll own a piece of the system end to end, walk away with hands-on experience in prompting and evaluating AI, and have a concrete project you can speak to in future interviews.`;
+
+test('preserves the full ClearMed question and assigns it to AI with multiline headers', () => {
+  for (const lineBreak of ['\n', '\r\n', '\r', '\u2028', '\u2029']) {
+    const question = clearMedQuestion.replaceAll('\n', lineBreak);
+    const header = `[AI] ${question}`;
+    const headers = [
+      'Timestamp',
+      'Applicant Name',
+      '[AI] ML experience',
+      header,
+      '[Design] Portfolio',
+    ];
+
+    assert.deepEqual(parseSheetSectionHeader(header), {
+      hasSectionPrefix: true,
+      question,
+      sectionKey: 'ai',
+    });
+    assert.equal(getSheetQuestionLabel(header), question);
+    assert.deepEqual(getSheetSectionIndexes(headers), {
+      ai: [2, 3],
+      design: [4],
+      robotics: [],
+      general: [0, 1],
+      hack: [],
+      other: [],
+    });
+  }
+});
+
 test('detects priority columns, first-choice track, and reviewer comments reliably', () => {
   const headers = [
     'Timestamp',

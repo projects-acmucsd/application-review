@@ -1336,7 +1336,7 @@ export default function GoogleSheetViewer() {
                             key={`${selectedAnswerSection.key}-${rowIndex}`}
                             className="grid gap-4 py-5 transition-colors hover:bg-[#f8fbff] md:grid-cols-[minmax(180px,0.42fr)_minmax(0,0.58fr)]"
                           >
-                            <h3 className="text-sm font-bold leading-6 text-[#333]">
+                            <h3 className="whitespace-pre-wrap text-sm font-bold leading-6 text-[#333]">
                               {question}
                             </h3>
                             <div className="whitespace-pre-wrap text-sm leading-7 text-neutral-700">
