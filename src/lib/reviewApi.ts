@@ -6,6 +6,7 @@ export type ReviewDecision = 'reject' | 'waitlist' | 'accept';
 
 export interface ApplicationReview {
   applicationId: string;
+  comment: string | null;
   rating: number | null;
   decision: ReviewDecision | null;
   updatedByEmail: string;
@@ -110,10 +111,14 @@ export async function listApplicationReviews(
 
 export async function saveApplicationReview({
   applicationId,
+  comment,
+  expectedUpdatedAt,
   rating,
   decision,
 }: {
   applicationId: string;
+  comment?: string;
+  expectedUpdatedAt?: string | null;
   rating: number | null;
   decision: ReviewDecision | null;
 }): Promise<ApplicationReview> {
@@ -125,6 +130,8 @@ export async function saveApplicationReview({
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        comment,
+        expectedUpdatedAt,
         rating,
         decision,
       }),

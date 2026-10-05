@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { createHttpError, readBearerToken } from '../auth/google-auth.js';
 import {
+  assertReviewCommentInput,
   getApplicationReviewStats,
   listApplicationReviews,
   upsertApplicationReview,
@@ -9,6 +10,8 @@ import {
 } from './reviews.service.js';
 
 interface ReviewBody {
+  comment?: unknown;
+  expectedUpdatedAt?: unknown;
   rating?: unknown;
   decision?: unknown;
 }
@@ -25,7 +28,12 @@ function isReviewDecision(
   );
 }
 
-export function parseReviewBody(body: ReviewBody): ApplicationReviewInput {
+export function parseReviewBody(value: unknown): ApplicationReviewInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw createHttpError(400, 'Review must be an object.');
+  }
+  const body = value as ReviewBody;
+  assertReviewCommentInput(body);
   if (
     body.rating !== undefined &&
     typeof body.rating !== 'number' &&
@@ -53,6 +61,10 @@ export function parseReviewBody(body: ReviewBody): ApplicationReviewInput {
   return {
     rating,
     decision,
+    ...(typeof body.comment === 'string' ? { comment: body.comment } : {}),
+    ...(body.expectedUpdatedAt !== undefined
+      ? { expectedUpdatedAt: body.expectedUpdatedAt as string | null }
+      : {}),
   };
 }
 
@@ -81,7 +93,7 @@ reviewsRouter.put('/:applicationId', async (req, res, next) => {
     const review = await upsertApplicationReview({
       accessToken: readBearerToken(req),
       applicationId: req.params.applicationId,
-      review: parseReviewBody(req.body as ReviewBody),
+      review: parseReviewBody(req.body),
     });
 
     res.json({ data: review });
