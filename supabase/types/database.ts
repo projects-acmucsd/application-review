@@ -39,6 +39,7 @@ export type Database = {
       application_reviews: {
         Row: {
           application_id: string;
+          comment: string | null;
           rating: number | null;
           decision: 'reject' | 'waitlist' | 'accept' | null;
           updated_by_email: string;
@@ -47,6 +48,7 @@ export type Database = {
         };
         Insert: {
           application_id: string;
+          comment?: string | null;
           rating?: number | null;
           decision?: 'reject' | 'waitlist' | 'accept' | null;
           updated_by_email: string;
@@ -55,6 +57,7 @@ export type Database = {
         };
         Update: {
           application_id?: string;
+          comment?: string | null;
           rating?: number | null;
           decision?: 'reject' | 'waitlist' | 'accept' | null;
           updated_by_email?: string;

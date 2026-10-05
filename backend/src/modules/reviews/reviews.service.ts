@@ -15,6 +15,7 @@ type ReviewRow =
 
 export interface ApplicationReview {
   applicationId: string;
+  comment: string | null;
   rating: number | null;
   decision: ReviewDecision | null;
   updatedByEmail: string;
@@ -23,6 +24,8 @@ export interface ApplicationReview {
 }
 
 export interface ApplicationReviewInput {
+  comment?: string;
+  expectedUpdatedAt?: string | null;
   rating: number | null;
   decision: ReviewDecision | null;
 }
@@ -73,9 +76,54 @@ function assertDecision(decision: ReviewDecision | null) {
   }
 }
 
+function isReviewTimestamp(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(value);
+  if (!match || !Number.isFinite(Date.parse(value))) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return year > 0 && month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth;
+}
+
+export function assertReviewCommentInput(review: {
+  comment?: unknown;
+  expectedUpdatedAt?: unknown;
+}) {
+  if (
+    review.comment !== undefined &&
+    (typeof review.comment !== 'string' || review.comment.includes('\0'))
+  ) {
+    throw createHttpError(400, 'Comment must be text without null characters.');
+  }
+
+  if (review.comment !== undefined && review.expectedUpdatedAt === undefined) {
+    throw createHttpError(400, 'Comment saves require expectedUpdatedAt.');
+  }
+
+  const version = review.expectedUpdatedAt;
+  if (
+    version !== undefined &&
+    version !== null &&
+    (typeof version !== 'string' || !isReviewTimestamp(version))
+  ) {
+    throw createHttpError(400, 'expectedUpdatedAt must be a valid timestamp or null.');
+  }
+}
+
+function createReviewConflictError() {
+  return createHttpError(
+    409,
+    'This review changed since you started editing. Reload the latest review before saving.',
+  );
+}
+
 function toReview(row: ReviewRow): ApplicationReview {
   return {
     applicationId: row.application_id,
+    comment: row.comment,
     rating: row.rating,
     decision: row.decision,
     updatedByEmail: row.updated_by_email,
@@ -117,28 +165,45 @@ export async function upsertApplicationReview({
   assertApplicationId(applicationId);
   assertRating(review.rating);
   assertDecision(review.decision);
+  assertReviewCommentInput(review);
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('application_reviews')
-    .upsert(
-      {
-        application_id: applicationId,
-        rating: review.rating,
-        decision: review.decision,
-        updated_by_email: normalizeEmail(profile.email),
-        updated_by_name: profile.name || profile.email,
-      },
-      { onConflict: 'application_id' },
-    )
-    .select()
-    .single();
+  const values = {
+    application_id: applicationId,
+    rating: review.rating,
+    decision: review.decision,
+    updated_by_email: normalizeEmail(profile.email),
+    updated_by_name: profile.name || profile.email,
+    // Omitted comments from older or decision-only clients must stay unchanged.
+    ...(review.comment !== undefined ? { comment: review.comment } : {}),
+  };
+  const table = getSupabaseAdmin().from('application_reviews');
+  const { data, error } = await (
+    review.expectedUpdatedAt === null
+      ? table.insert(values).select().single()
+      : review.expectedUpdatedAt !== undefined
+        ? table
+            .update(values)
+            .eq('application_id', applicationId)
+            .eq('updated_at', review.expectedUpdatedAt)
+            .select()
+            .maybeSingle()
+        : table.upsert(values, { onConflict: 'application_id' }).select().single()
+  );
 
   if (error) {
+    if (review.expectedUpdatedAt === null && error.code === '23505') {
+      throw createReviewConflictError();
+    }
+
     if (isSupabaseConnectionError(error)) {
       throw createSupabaseUnavailableError();
     }
 
     throw error;
+  }
+
+  if (!data) {
+    throw createReviewConflictError();
   }
 
   return toReview(data);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useReducer } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { InternalShell } from '../components/InternalShell';
@@ -16,25 +16,20 @@ import {
 } from '../lib/adminApi';
 import {
   completeGoogleSignInFromRedirect,
-  getGoogleApiClient,
   getStoredGoogleProfile,
   type GoogleProfile,
   restoreGoogleSession,
   signOutFromGoogle,
 } from '../lib/googleAuth';
 import {
-  getColumnLetter,
   getFirstChoiceTrack,
   getApplicationId,
   getPriorityColumnIndexes,
   getReviewerCommentsColumnIndex,
   getSheetSectionIndexes,
-  getSheetCellRange,
   getSheetQuestionLabel,
-  clearApplicationSheetDataCache,
   loadApplicationSheetData,
   normalizeSheetTrackName,
-  REVIEWER_COMMENTS_HEADER,
   type SheetSectionKey,
   type SheetRow,
 } from '../lib/googleSheetData';
@@ -46,6 +41,10 @@ import {
   type ReviewDecision,
 } from '../lib/reviewApi';
 import type { ApplicationSourceSettings } from '../lib/settingsApi';
+import {
+  EMPTY_REVIEW_EDITOR,
+  reviewEditorReducer,
+} from '../lib/reviewEditor';
 import {
   createCollaborationSocket,
   parseCollaborationMessage,
@@ -349,8 +348,16 @@ export default function GoogleSheetViewer() {
   });
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [isEditing, setIsEditing] = useState(false);
-  const [commentText, setCommentText] = useState('');
+  const [editor, dispatchEditor] = useReducer(
+    reviewEditorReducer,
+    EMPTY_REVIEW_EDITOR,
+  );
+  const {
+    isEditing,
+    comment: commentText,
+    rating: draftRating,
+    decision: draftDecision,
+  } = editor;
   const [isAdmin, setIsAdmin] = useState(() => hasCachedAdminAccess());
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [newData, setNewData] = useState<string[] | null>(null);
@@ -358,6 +365,8 @@ export default function GoogleSheetViewer() {
   const [reviewLoadError, setReviewLoadError] = useState('');
   const [assignmentWarning, setAssignmentWarning] = useState('');
   const [reviewsWarning, setReviewsWarning] = useState('');
+  const [reviewsReady, setReviewsReady] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(true);
   const [reviewsByApplicationId, setReviewsByApplicationId] = useState<
@@ -367,11 +376,9 @@ export default function GoogleSheetViewer() {
   const collaborationSocket = useRef<WebSocket | null>(null);
   const applicationIdRef = useRef<string | null>(null);
   const commentTextRef = useRef('');
-  const headersRef = useRef<string[]>([]);
-  const isEditingRef = useRef(false);
+  const isSavingReviewRef = useRef(false);
+  const reviewRequestSequence = useRef(0);
   const [applicationId, setApplicationId] = useState<string | null>(null);
-  const [draftRating, setDraftRating] = useState<number | null>(null);
-  const [draftDecision, setDraftDecision] = useState<ReviewDecision | null>(null);
   const [, setCollaborationStatus] =
     useState<CollaborationStatus>('idle');
   const [, setCollaborationReviewers] = useState<
@@ -388,14 +395,6 @@ export default function GoogleSheetViewer() {
   useEffect(() => {
     commentTextRef.current = commentText;
   }, [commentText]);
-
-  useEffect(() => {
-    headersRef.current = headers;
-  }, [headers]);
-
-  useEffect(() => {
-    isEditingRef.current = isEditing;
-  }, [isEditing]);
 
   useEffect(() => {
     applicationIdRef.current = applicationId;
@@ -448,21 +447,30 @@ export default function GoogleSheetViewer() {
   }, []);
 
   const fetchApplicationReviews = useCallback(async () => {
-    setReviewsWarning('');
+    if (isSavingReviewRef.current) return;
+    const requestSequence = ++reviewRequestSequence.current;
     try {
       const reviews = await listApplicationReviews({ fresh: true });
+      if (requestSequence !== reviewRequestSequence.current || isSavingReviewRef.current) {
+        return;
+      }
       setReviewsByApplicationId(
         Object.fromEntries(
           reviews.map((review) => [review.applicationId, review]),
         ),
       );
+      setReviewsReady(true);
+      setReviewsWarning('');
     } catch (error) {
+      if (requestSequence !== reviewRequestSequence.current || isSavingReviewRef.current) {
+        return;
+      }
       console.error('Error loading application reviews:', error);
-      setReviewsByApplicationId({});
+      setReviewsReady(false);
       setReviewsWarning(
-        `Saved ratings and decisions could not be loaded. ${getErrorMessage(
+        `Saved reviews could not be loaded. ${getErrorMessage(
           error,
-          'Do not rely on displayed review state until this is resolved.',
+          'Saving is disabled until the latest reviews can be loaded.',
         )}`,
       );
     }
@@ -544,14 +552,15 @@ export default function GoogleSheetViewer() {
       if (!lastFetchedRow.current || lastFetchedRow.current.index !== row.index) {
         lastFetchedRow.current = row;
         setCurrentRow(row.data);
-        setCommentText(getReviewerCommentValue(headers, row.data));
+        setSaveError('');
+        setNewData(null);
+        setShowConflictWarning(false);
         setRemoteDraft(null);
         setLastRemoteSave(null);
       }
     } else {
       setApplicationId(null);
       setCurrentRow([]);
-      setCommentText('');
       lastFetchedRow.current = null;
     }
   }, [
@@ -564,16 +573,19 @@ export default function GoogleSheetViewer() {
   ]);
 
   useEffect(() => {
-    if (!applicationId) {
-      setDraftRating(null);
-      setDraftDecision(null);
-      return;
-    }
+    dispatchEditor({
+      type: 'receive',
+      applicationId,
+      review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
+      legacyComment: getReviewerCommentValue(headers, currentRow),
+    });
+  }, [applicationId, currentRow, headers, reviewsByApplicationId]);
 
-    const review = reviewsByApplicationId[applicationId];
-    setDraftRating(review?.rating ?? null);
-    setDraftDecision(review?.decision ?? null);
-  }, [applicationId, reviewsByApplicationId]);
+  useEffect(() => {
+    if (!reviewer) return;
+    const interval = setInterval(() => void fetchApplicationReviews(), REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchApplicationReviews, reviewer]);
 
   useEffect(() => {
     if (!applicationSource) {
@@ -617,9 +629,6 @@ export default function GoogleSheetViewer() {
             } else {
               lastFetchedRow.current = updatedRow;
               setCurrentRow(updatedRow.data);
-              setCommentText(
-                getReviewerCommentValue(sheetData.headers, updatedRow.data),
-              );
             }
           }
         }
@@ -645,14 +654,13 @@ export default function GoogleSheetViewer() {
     );
   }, []);
 
-  const updateDataSmoothly = (newRow: string[], nextHeaders = headers) => {
+  const updateDataSmoothly = (newRow: string[]) => {
     const rowIndex = lastFetchedRow.current?.index || 0;
     lastFetchedRow.current = {
       data: newRow,
       index: rowIndex,
     };
     setCurrentRow(newRow);
-    setCommentText(getReviewerCommentValue(nextHeaders, newRow));
     if (rowIndex) {
       updateCachedRow(rowIndex, newRow);
     }
@@ -668,39 +676,11 @@ export default function GoogleSheetViewer() {
   );
 
   const applyRemoteSavedComment = useCallback((update: RemoteCommentUpdate) => {
-    const existingCommentColumnIndex = getReviewerCommentsColumnIndex(
-      headersRef.current,
-    );
-    const commentColumnIndex =
-      existingCommentColumnIndex >= 0
-        ? existingCommentColumnIndex
-        : headersRef.current.length;
-
-    if (existingCommentColumnIndex < 0) {
-      const nextHeaders = [...headersRef.current, REVIEWER_COMMENTS_HEADER];
-      headersRef.current = nextHeaders;
-      setHeaders(nextHeaders);
-    }
-
-    setCurrentRow((previousRow) => {
-      const nextRow = [...previousRow];
-      nextRow[commentColumnIndex] = update.value;
-
-      if (lastFetchedRow.current) {
-        lastFetchedRow.current = {
-          data: nextRow,
-          index: lastFetchedRow.current.index,
-        };
-        updateCachedRow(lastFetchedRow.current.index, nextRow);
-      }
-
-      return nextRow;
-    });
-
-    setCommentText(update.value);
+    // Collaboration messages are notifications, not database versions.
     setRemoteDraft(null);
     setLastRemoteSave(update);
-  }, [updateCachedRow]);
+    void fetchApplicationReviews();
+  }, [fetchApplicationReviews]);
 
   const broadcastCommentDraft = useCallback(
     (value: string) => {
@@ -829,9 +809,6 @@ export default function GoogleSheetViewer() {
       if (message.type === 'comment_draft_update') {
         setRemoteDraft(update);
         setLastRemoteSave(null);
-        if (isEditingRef.current) {
-          setCommentText(message.value);
-        }
         return;
       }
 
@@ -861,70 +838,20 @@ export default function GoogleSheetViewer() {
   }, [applicationId, applyRemoteSavedComment, reviewer]);
 
   const saveComment = async () => {
-    if (isSavingReview) return;
+    if (isSavingReviewRef.current || !reviewsReady) return;
     if (!lastFetchedRow.current || !applicationId || !applicationSource) return;
-    const rowIndex = lastFetchedRow.current.index + 1;
-    const existingCommentColumnIndex = getReviewerCommentsColumnIndex(headers);
-    const shouldCreateCommentColumn = existingCommentColumnIndex < 0;
-    const commentColumnIndex = shouldCreateCommentColumn
-      ? headers.length
-      : existingCommentColumnIndex;
-    const colIndex = commentColumnIndex + 1;
+    if (editor.applicationId !== applicationId) return;
+    const savedApplicationId = applicationId;
 
+    isSavingReviewRef.current = true;
+    ++reviewRequestSequence.current;
+    setIsSavingReview(true);
+    setSaveError('');
     try {
-      setIsSavingReview(true);
-      const colLetter = getColumnLetter(colIndex);
-      const gapi = await getGoogleApiClient();
-      const cellRange = getSheetCellRange(
-        applicationSource,
-        `${colLetter}${rowIndex}`,
-      );
-      const currentVal = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: applicationSource.spreadsheetId,
-        range: cellRange,
-      });
-      const existingValue = currentVal.result.values?.[0]?.[0] || '';
-      const currentAnswer = currentRow[commentColumnIndex] || '';
-
-      if (existingValue !== currentAnswer) {
-        const conflictedData = [...currentRow];
-        conflictedData[commentColumnIndex] = existingValue;
-        setNewData(conflictedData);
-        setShowConflictWarning(true);
-        return;
-      }
-
-      if (shouldCreateCommentColumn) {
-        await gapi.client.sheets.spreadsheets.values.update({
-          spreadsheetId: applicationSource.spreadsheetId,
-          range: getSheetCellRange(applicationSource, `${colLetter}1`),
-          valueInputOption: 'RAW',
-          resource: { values: [[REVIEWER_COMMENTS_HEADER]] },
-        });
-        setHeaders((currentHeaders) =>
-          getReviewerCommentsColumnIndex(currentHeaders) >= 0
-            ? currentHeaders
-            : [...currentHeaders, REVIEWER_COMMENTS_HEADER],
-        );
-      }
-
-      await gapi.client.sheets.spreadsheets.values.update({
-        spreadsheetId: applicationSource.spreadsheetId,
-        range: cellRange,
-        valueInputOption: 'RAW',
-        resource: { values: [[commentText]] },
-      });
-      clearApplicationSheetDataCache();
-
-      const updated = [...currentRow];
-      updated[commentColumnIndex] = commentText;
-      const nextHeaders = shouldCreateCommentColumn
-        ? [...headers, REVIEWER_COMMENTS_HEADER]
-        : headers;
-      updateDataSmoothly(updated, nextHeaders);
-
       const savedReview = await saveApplicationReview({
-        applicationId,
+        applicationId: savedApplicationId,
+        comment: commentText,
+        expectedUpdatedAt: editor.expectedUpdatedAt,
         rating: draftRating,
         decision: draftDecision,
       });
@@ -932,14 +859,21 @@ export default function GoogleSheetViewer() {
         ...currentReviews,
         [savedReview.applicationId]: savedReview,
       }));
+      dispatchEditor({ type: 'saved', review: savedReview });
 
-      broadcastCommentSaved(commentText);
-      setIsEditing(false);
+      if (applicationIdRef.current === savedApplicationId) {
+        broadcastCommentSaved(savedReview.comment ?? '');
+      }
     } catch (error) {
-      console.error('Save comment error:', error);
-      alert('Failed to save comment. Please try again.');
+      console.error('Save review error:', error);
+      if (applicationIdRef.current === savedApplicationId) {
+        setSaveError(getErrorMessage(error, 'Failed to save review. Please try again.'));
+      }
     } finally {
+      isSavingReviewRef.current = false;
       setIsSavingReview(false);
+      // A failed save can mean another reviewer committed a newer version.
+      void fetchApplicationReviews();
     }
   };
 
@@ -996,7 +930,6 @@ export default function GoogleSheetViewer() {
     ? getSectionTitle(firstChoiceTrack)
     : 'Unspecified';
   const priorities = getSectionPriorities();
-  const commentValue = getReviewerCommentValue(headers, currentRow);
   const hasPrevious = currentPage > 1;
   const hasNext = filteredRows.length > currentPage;
   const progressPercent = filteredRows.length
@@ -1053,7 +986,7 @@ export default function GoogleSheetViewer() {
   const isReviewLoading =
     (isLoading || isAssignmentScopedLoading) &&
     (!headers.length || !currentRow.length);
-  const reviewDataWarning = [assignmentWarning, reviewsWarning]
+  const reviewDataWarning = [assignmentWarning, reviewsWarning, saveError]
     .filter(Boolean)
     .join(' ');
   const hasReviewLoadError = Boolean(reviewLoadError);
@@ -1097,7 +1030,12 @@ export default function GoogleSheetViewer() {
                 onClick={() => {
                   updateDataSmoothly(newData);
                   setShowConflictWarning(false);
-                  setIsEditing(false);
+                  dispatchEditor({
+                    type: 'reset',
+                    applicationId,
+                    review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
+                    legacyComment: getReviewerCommentValue(headers, newData),
+                  });
                 }}
                 className="bg-blue-400 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
               >
@@ -1367,6 +1305,7 @@ export default function GoogleSheetViewer() {
                     hasPrevious={hasPrevious}
                     isEditing={isEditing}
                     isSaving={isSavingReview}
+                    isReady={reviewsReady && editor.applicationId === applicationId}
                     nextHref={hasNext ? createReviewHref(currentPage + 1) : undefined}
                     previousHref={
                       hasPrevious ? createReviewHref(currentPage - 1) : undefined
@@ -1374,29 +1313,25 @@ export default function GoogleSheetViewer() {
                     saveComment={saveComment}
                     selectedDecision={draftDecision}
                     selectedRating={draftRating}
-                    setCommentText={setCommentText}
-                    setIsEditing={setIsEditing}
+                    setCommentText={(value) => dispatchEditor({ type: 'comment', value })}
+                    onBeginEditing={() => dispatchEditor({ type: 'edit' })}
                     setLastRemoteSave={setLastRemoteSave}
                     setRemoteDraft={setRemoteDraft}
                     onDecisionChange={(decision) => {
-                      setIsEditing(true);
-                      setDraftDecision((currentDecision) =>
-                        currentDecision === decision ? null : decision,
-                      );
+                      dispatchEditor({ type: 'decision', value: decision });
                     }}
                     onRatingChange={(rating) => {
-                      setIsEditing(true);
-                      setDraftRating(rating);
+                      dispatchEditor({ type: 'rating', value: rating });
                     }}
                     onDraftChange={broadcastCommentDraft}
                     onReset={() => {
-                      setIsEditing(false);
-                      setCommentText(commentValue);
-                      const savedReview = applicationId
-                        ? reviewsByApplicationId[applicationId]
-                        : undefined;
-                      setDraftRating(savedReview?.rating ?? null);
-                      setDraftDecision(savedReview?.decision ?? null);
+                      dispatchEditor({
+                        type: 'reset',
+                        applicationId,
+                        review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
+                        legacyComment: getReviewerCommentValue(headers, currentRow),
+                      });
+                      setSaveError('');
                     }}
                   />
                 )}
@@ -1418,13 +1353,14 @@ interface ReviewPanelProps {
   hasPrevious: boolean;
   isEditing: boolean;
   isSaving: boolean;
+  isReady: boolean;
   nextHref?: string;
   selectedDecision: ReviewDecision | null;
   selectedRating: number | null;
   previousHref?: string;
   saveComment: () => Promise<void>;
   setCommentText: (value: string) => void;
-  setIsEditing: (value: boolean) => void;
+  onBeginEditing: () => void;
   setLastRemoteSave: (value: RemoteCommentUpdate | null) => void;
   setRemoteDraft: (value: RemoteCommentUpdate | null) => void;
   onDecisionChange: (decision: ReviewDecision) => void;
@@ -1441,13 +1377,14 @@ function ReviewPanel({
   hasPrevious,
   isEditing,
   isSaving,
+  isReady,
   nextHref,
   previousHref,
   saveComment,
   selectedDecision,
   selectedRating,
   setCommentText,
-  setIsEditing,
+  onBeginEditing,
   setLastRemoteSave,
   setRemoteDraft,
   onDecisionChange,
@@ -1509,7 +1446,7 @@ function ReviewPanel({
                 </button>
                 <button
                   aria-busy={isSaving}
-                  disabled={isSaving}
+                  disabled={isSaving || !isReady}
                   onClick={() => void saveComment()}
                   className="min-w-20 bg-[#333] px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
                 >
@@ -1518,6 +1455,12 @@ function ReviewPanel({
               </div>
             ) : null}
           </div>
+
+          {!isReady ? (
+            <p role="status" className="mt-4 text-sm text-neutral-500">
+              Waiting for the latest saved review before editing.
+            </p>
+          ) : null}
 
           {isSaving ? (
             <div
@@ -1547,7 +1490,7 @@ function ReviewPanel({
                     key={score}
                     type="button"
                     aria-pressed={selectedRating === score}
-                    disabled={isSaving}
+                    disabled={isSaving || !isReady}
                     onClick={() => onRatingChange(score)}
                     className={`portal-square-control flex h-8 w-8 items-center justify-center text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                       selectedRating === score
@@ -1570,7 +1513,7 @@ function ReviewPanel({
                     key={option.decision}
                     type="button"
                     aria-pressed={isSelected}
-                    disabled={isSaving}
+                    disabled={isSaving || !isReady}
                     onClick={() => onDecisionChange(option.decision)}
                     className={`portal-square-control h-9 border px-3 text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                       isSelected
@@ -1587,10 +1530,10 @@ function ReviewPanel({
 
           <textarea
             value={commentText}
-            disabled={isSaving}
-            onFocus={() => setIsEditing(true)}
+            disabled={isSaving || !isReady}
+            onFocus={onBeginEditing}
             onChange={(event) => {
-              setIsEditing(true);
+              onBeginEditing();
               setCommentText(event.target.value);
               setRemoteDraft(null);
               setLastRemoteSave(null);
