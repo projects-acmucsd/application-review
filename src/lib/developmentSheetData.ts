@@ -17,6 +17,8 @@ const ROBOTICS_QUESTIONS = [
 export function createMockSheetRows(): string[][] {
   const headers = Array.from({ length: 60 }, (_, index) => `Question ${index + 1}`);
   headers[2] = 'Applicant Name';
+  headers[8] = 'Can you attend weekly meetings?';
+  headers[9] = 'Have you joined an ACM project before?';
   headers[13] = 'First Priority';
   headers[14] = 'Second Priority';
   headers[15] = 'Third Priority';
@@ -25,6 +27,8 @@ export function createMockSheetRows(): string[][] {
 
   const row = Array.from({ length: 60 }, (_, index) => `Sample response ${index + 1}`);
   row[2] = 'Test Applicant';
+  row[8] = 'Yes';
+  row[9] = 'No';
   row[13] = 'AI';
   row[14] = 'Design';
   row[15] = 'Hack';
@@ -36,6 +40,8 @@ export function createMockSheetRows(): string[][] {
     (_, index) => `Second fake application response ${index + 1}`,
   );
   secondRow[2] = 'Second Test Applicant';
+  secondRow[8] = 'No';
+  secondRow[9] = 'Yes';
   secondRow[13] = 'Design';
   secondRow[14] = 'Hack';
   secondRow[15] = 'AI';
