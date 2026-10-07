@@ -4,7 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 const Home = lazy(() => import('./pages/Home'));
 const Admin = lazy(() => import('./pages/Admin'));
 const GoogleSheetViewer = lazy(() => import('./pages/GoogleSheetViewer'));
-const RankedCandidates = lazy(() => import('./pages/RankedCandidates'));
+const Decisions = lazy(() => import('./pages/Decisions'));
 
 function App() {
   return (
@@ -13,7 +13,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/about" element={<Navigate to="/" replace />} />
-        <Route path="/rankings" element={<RankedCandidates />} />
+        <Route path="/rankings" element={<Decisions />} />
         <Route path="/review" element={<GoogleSheetViewer />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

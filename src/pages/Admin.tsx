@@ -118,10 +118,10 @@ function AdminMetric({
   return (
     <div className="flex min-h-28 flex-col justify-center px-6 py-5 text-center sm:px-8">
       <span className={`mx-auto h-1 w-12 ${accentClassName}`} />
-      <p className="mt-5 text-4xl font-medium leading-none text-[#2f3138]">
+      <p className="portal-metric mt-5 text-[#2f3138]">
         {value}
       </p>
-      <p className="mt-3 text-sm font-semibold text-neutral-500">{label}</p>
+      <p className="portal-body mt-3 text-neutral-500">{label}</p>
     </div>
   );
 }
@@ -564,16 +564,16 @@ export default function Admin() {
           <section className="portal-surface px-6 py-6 sm:px-8">
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                <p className="portal-eyebrow text-blue-500">
                   Admin
                 </p>
-                <h1 className="text-4xl font-medium leading-[1.08] text-[#2f3138] sm:text-5xl">
+                <h1 className="portal-page-title text-[#2f3138]">
                   Control Panel
                 </h1>
               </div>
               <Link
                 to="/review"
-                className="portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-base font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
               >
                 Open Applications
               </Link>
@@ -582,17 +582,17 @@ export default function Admin() {
         )}
 
         {errorMessage ? (
-          <p className="portal-square-field mt-5 border border-[#ff6f6f]/20 bg-[#ff6f6f]/10 px-4 py-3 text-sm font-semibold text-[#b83232]">
+          <p className="portal-meta portal-square-field mt-5 border border-[#ff6f6f]/20 bg-[#ff6f6f]/10 px-4 py-3 text-[#b83232]">
             {errorMessage}
           </p>
         ) : null}
 
         {adminStatus && !adminStatus.isAdmin ? (
           <section className="portal-surface-quiet mt-6 px-6 py-5">
-            <h2 className="text-2xl font-bold text-[#333]">
+            <h2 className="portal-card-title text-[#333]">
               Admin access required
             </h2>
-            <p className="mt-2 text-sm font-medium leading-6 text-neutral-500">
+            <p className="portal-meta mt-2 text-neutral-500">
               Your ACM Google account can access the reviewer portal, but it is
               not listed in `ADMIN_EMAILS`.
             </p>
@@ -637,14 +637,14 @@ export default function Admin() {
               <section className="portal-row-band px-6 py-6 sm:px-8">
                 <div className="grid min-h-28 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.44fr)] lg:items-center">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                    <p className="portal-eyebrow text-blue-500">
                       Settings
                     </p>
-                    <h2 className="mt-1 text-2xl font-bold text-[#333]">
+                    <h2 className="portal-card-title mt-1 text-[#333]">
                       Review due date
                     </h2>
                     {reviewDueDateUpdatedAt ? (
-                      <p className="mt-2 text-sm font-semibold text-neutral-500">
+                      <p className="portal-meta mt-2 text-neutral-500">
                         Last updated{' '}
                         {formatAdminTimestamp(reviewDueDateUpdatedAt)}
                       </p>
@@ -653,7 +653,7 @@ export default function Admin() {
 
                   <div className="grid w-full gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
                     <label className="block">
-                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">
+                      <span className="portal-label text-neutral-400">
                         Due date
                       </span>
                       <input
@@ -662,14 +662,14 @@ export default function Admin() {
                         onChange={(event) =>
                           setReviewDueDateInput(event.target.value)
                         }
-                        className="portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-sm font-semibold text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                        className="portal-body portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                       />
                     </label>
                     <button
                       type="button"
                       onClick={() => void handleReviewDueDateSave()}
                       disabled={isSavingReviewDueDate || !reviewDueDateInput}
-                      className="portal-square-control mt-auto h-12 bg-blue-400 px-5 text-sm font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                      className="portal-control portal-square-control mt-auto h-12 bg-blue-400 px-5 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
                     >
                       {isSavingReviewDueDate ? 'Saving...' : 'Save date'}
                     </button>
@@ -680,15 +680,15 @@ export default function Admin() {
               <section className="portal-row-band px-6 py-6 sm:px-8">
                 <div className="grid min-h-28 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.44fr)] lg:items-center">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                    <p className="portal-eyebrow text-blue-500">
                       Source
                     </p>
-                    <h2 className="mt-1 text-2xl font-bold text-[#333]">
+                    <h2 className="portal-card-title mt-1 text-[#333]">
                       Cycle Change
                     </h2>
                     {applicationSource &&
                     !applicationSource.updatedAt.startsWith('1970-') ? (
-                      <p className="mt-2 text-sm font-semibold text-neutral-500">
+                      <p className="portal-meta mt-2 text-neutral-500">
                         Last changed{' '}
                         {formatAdminTimestamp(applicationSource.updatedAt)}
                       </p>
@@ -697,7 +697,7 @@ export default function Admin() {
 
                   <div className="grid w-full gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
                     <label className="block">
-                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">
+                      <span className="portal-label text-neutral-400">
                         Google Sheet link
                       </span>
                       <input
@@ -705,7 +705,7 @@ export default function Admin() {
                         onChange={(event) =>
                           setApplicationSourceUrlInput(event.target.value)
                         }
-                        className="portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-sm font-semibold text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                        className="portal-body portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                         placeholder="https://docs.google.com/spreadsheets/d/..."
                       />
                     </label>
@@ -716,7 +716,7 @@ export default function Admin() {
                         isSavingApplicationSource ||
                         !applicationSourceUrlInput.trim()
                       }
-                      className="portal-square-control mt-auto h-12 bg-blue-400 px-5 text-sm font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                      className="portal-control portal-square-control mt-auto h-12 bg-blue-400 px-5 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
                     >
                       {isSavingApplicationSource
                         ? 'Validating...'
@@ -739,14 +739,14 @@ export default function Admin() {
               <>
                 <div className="grid gap-6 px-6 py-5 sm:px-8 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,1fr)] lg:items-center">
                   <div>
-                    <h2 className="text-3xl font-medium text-[#2f3138]">
+                    <h2 className="portal-section-title text-[#2f3138]">
                       Application Allocation
                     </h2>
-                    <p className="mt-2 text-sm font-semibold text-neutral-500">
+                    <p className="portal-meta mt-2 text-neutral-500">
                       {visibleApplications} applicants in the current view
                     </p>
                     <div className="mt-3 max-w-md">
-                      <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.14em] text-neutral-400">
+                      <div className="portal-label flex items-center justify-between gap-4 text-neutral-400">
                         <span>{assignedFilteredRows.length} assigned</span>
                         <span>{unassignedFilteredRows.length} unassigned</span>
                       </div>
@@ -762,7 +762,7 @@ export default function Admin() {
                     <input
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      className="portal-muted-field portal-square-field h-11 min-w-0 border px-4 text-sm font-medium text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:w-56"
+                      className="portal-body portal-muted-field portal-square-field h-11 min-w-0 border px-4 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:w-56"
                       placeholder="Search applicant"
                     />
                     <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -771,7 +771,7 @@ export default function Admin() {
                           key={filter.key}
                           type="button"
                           onClick={() => setTrackFilter(filter.key)}
-                          className={`portal-square-control border px-3 py-2 text-xs font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                          className={`portal-control portal-square-control border px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                             trackFilter === filter.key
                               ? 'border-blue-300 bg-blue-50 text-blue-700'
                               : 'border-neutral-200 bg-transparent text-neutral-500 hover:bg-blue-50 hover:text-blue-600'
@@ -786,7 +786,7 @@ export default function Admin() {
 
                 <div className="grid gap-px bg-neutral-200/70 lg:grid-cols-[240px_minmax(0,1fr)_160px_200px] lg:items-stretch">
                   <div className="portal-row-band px-6 py-4 sm:px-8 lg:pr-4">
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">
+                    <span className="portal-label text-neutral-400">
                       Action
                     </span>
                     <div className="portal-muted-field portal-square-field mt-2 grid h-12 grid-cols-2 border p-1">
@@ -795,7 +795,7 @@ export default function Admin() {
                           key={action}
                           type="button"
                           onClick={() => setAllocationAction(action)}
-                          className={`portal-square-control text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                          className={`portal-control portal-square-control transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                             allocationAction === action
                               ? 'bg-blue-50 text-blue-700'
                               : 'text-neutral-500 hover:text-neutral-800'
@@ -811,7 +811,7 @@ export default function Admin() {
                     ref={reviewerDropdownRef}
                     className="portal-row-band relative px-6 py-4 sm:px-8 lg:px-4"
                   >
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">
+                    <span className="portal-label text-neutral-400">
                       Reviewer
                     </span>
                     <button
@@ -822,7 +822,7 @@ export default function Admin() {
                       onClick={() =>
                         setIsReviewerDropdownOpen((isOpen) => !isOpen)
                       }
-                      className="portal-muted-field portal-square-field mt-2 flex h-12 w-full items-center justify-between gap-3 border px-4 text-left text-sm font-semibold text-[#333] outline-none transition hover:border-blue-200 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                      className="portal-control portal-muted-field portal-square-field mt-2 flex h-12 w-full items-center justify-between gap-3 border px-4 text-left text-[#333] outline-none transition hover:border-blue-200 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
                     >
                       <span className="truncate">
                         {selectedReviewer?.name ?? 'Choose reviewer'}
@@ -870,10 +870,10 @@ export default function Admin() {
                                   : 'text-[#333] hover:bg-neutral-50'
                               }`}
                             >
-                              <span className="text-sm font-bold">
+                              <span className="portal-label">
                                 {reviewer.name}
                               </span>
-                              <span className="text-xs font-semibold text-neutral-400">
+                              <span className="portal-meta text-neutral-400">
                                 {reviewer.email}
                               </span>
                             </button>
@@ -884,7 +884,7 @@ export default function Admin() {
                   </div>
 
                   <label className="portal-row-band block px-6 py-4 sm:px-8 lg:px-4">
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">
+                    <span className="portal-label text-neutral-400">
                       Applicants
                     </span>
                     <input
@@ -895,7 +895,7 @@ export default function Admin() {
                       onChange={(event) =>
                         setAssignmentCount(event.target.value)
                       }
-                      className="portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-sm font-semibold text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                      className="portal-body portal-muted-field portal-square-field mt-2 h-12 w-full border px-4 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                     />
                   </label>
 
@@ -909,7 +909,7 @@ export default function Admin() {
                         (allocationAction === 'assign' &&
                           !selectedReviewerEmail)
                       }
-                      className={`portal-square-control h-12 w-full px-5 text-sm font-bold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 ${
+                      className={`portal-control portal-square-control h-12 w-full px-5 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 ${
                         allocationAction === 'assign'
                           ? 'bg-blue-400 hover:bg-blue-500 focus:ring-blue-400'
                           : 'bg-[#333] hover:bg-neutral-700 focus:ring-[#333]'
@@ -927,7 +927,7 @@ export default function Admin() {
                 </div>
 
                 <div className="overflow-hidden">
-                  <div className="portal-row-band grid grid-cols-[minmax(0,1fr)_180px_220px] gap-4 px-6 py-3 text-xs font-bold uppercase tracking-[0.16em] text-neutral-400 sm:px-8">
+                  <div className="portal-label portal-row-band hidden grid-cols-[minmax(0,1fr)_180px_220px] gap-4 px-6 py-3 text-neutral-400 sm:px-8 md:grid">
                     <span>Applicant</span>
                     <span>First choice</span>
                     <span>Assigned to</span>
@@ -944,18 +944,18 @@ export default function Admin() {
                             className="grid gap-4 px-6 py-4 transition-colors hover:bg-[#f8fbff] sm:px-8 md:grid-cols-[minmax(0,1fr)_180px_220px] md:items-center"
                           >
                             <div>
-                              <p className="text-sm font-bold text-[#333]">
+                              <p className="portal-item-title text-[#333]">
                                 {row.data[2] || 'Unnamed applicant'}
                               </p>
-                              <p className="mt-1 text-xs font-semibold text-neutral-400">
+                              <p className="portal-meta mt-1 text-neutral-400">
                                 Application {row.index}
                               </p>
                             </div>
-                            <span className="text-sm font-bold text-blue-500">
+                            <span className="portal-label text-blue-500">
                               {getTrackLabel(getFirstChoice(headers, row))}
                             </span>
                             {assignment ? (
-                              <span className="portal-square-control inline-flex w-fit border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                              <span className="portal-meta portal-square-control inline-flex w-fit border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700">
                                 {assignment.assigneeName}
                               </span>
                             ) : (
@@ -966,7 +966,7 @@ export default function Admin() {
                                   !selectedReviewerEmail ||
                                   assigningApplicationId === applicationId
                                 }
-                                className="portal-square-control inline-flex h-9 w-fit items-center justify-center bg-blue-400 px-4 text-xs font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                                className="portal-control portal-square-control inline-flex h-9 w-fit items-center justify-center bg-blue-400 px-4 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
                               >
                                 {assigningApplicationId === applicationId
                                   ? 'Assigning...'
@@ -977,13 +977,13 @@ export default function Admin() {
                         );
                       })
                     ) : (
-                      <div className="px-6 py-8 text-sm font-semibold text-neutral-500 sm:px-8">
+                      <div className="portal-meta px-6 py-8 text-neutral-500 sm:px-8">
                         No applicants match the current filters.
                       </div>
                     )}
                   </div>
                   <div className="portal-row-band flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-                    <p className="text-sm font-semibold text-neutral-500">
+                    <p className="portal-meta text-neutral-500">
                       Showing {applicantRangeStart}-{applicantRangeEnd} of{' '}
                       {filteredRows.length} applicants
                     </p>
@@ -996,11 +996,11 @@ export default function Admin() {
                           )
                         }
                         disabled={currentApplicantPage <= 1}
-                        className="portal-square-control border border-neutral-200 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="portal-control portal-square-control border border-neutral-200 px-4 py-2 text-neutral-600 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Prev
                       </button>
-                      <span className="rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700">
+                      <span className="portal-label rounded-full bg-blue-50 px-4 py-2 text-blue-700">
                         {currentApplicantPage} / {applicantPageCount}
                       </span>
                       <button
@@ -1011,7 +1011,7 @@ export default function Admin() {
                           )
                         }
                         disabled={currentApplicantPage >= applicantPageCount}
-                        className="portal-square-control border border-neutral-200 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="portal-control portal-square-control border border-neutral-200 px-4 py-2 text-neutral-600 transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Next
                       </button>
@@ -1020,7 +1020,7 @@ export default function Admin() {
                 </div>
               </>
             ) : (
-              <div className="mt-6 bg-neutral-50 p-6 text-sm font-semibold text-neutral-500">
+              <div className="portal-meta mt-6 bg-neutral-50 p-6 text-neutral-500">
                 Ask reviewers to sign in once, or add reviewers to
                 `REVIEWER_LIST` / `VITE_REVIEWER_LIST`, to enable assignment
                 controls.

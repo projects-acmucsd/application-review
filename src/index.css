@@ -1,8 +1,15 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
+@import "./typography.css";
+
+:root {
+  --portal-brand-blue: #62b0ff;
+  --portal-link-blue: #2475bb;
+  --portal-charcoal: #333;
+  --portal-muted: #666;
+}
 
 body {
-  font-family: "DM Sans", sans-serif;
   background: #fafafa;
 }
 
@@ -88,5 +95,113 @@ body {
 
   100% {
     background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-skeleton-block, .portal-auth-progress { animation: none; }
+}
+
+.portal-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 4.875rem;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: 0.75rem 2rem;
+}
+
+.portal-header-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.portal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid #dfe3e9;
+  border-radius: 999px;
+  padding: 0.25rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(23 23 23 / 5%);
+}
+
+.portal-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 7rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  padding-inline: 1rem;
+  color: var(--portal-muted);
+  font-size: var(--portal-text-sm);
+  font-weight: var(--portal-weight-semibold);
+  line-height: var(--portal-leading-body);
+  letter-spacing: normal;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+
+.portal-nav-link:hover {
+  background: #f4f7fa;
+  color: var(--portal-charcoal);
+}
+
+.portal-nav-link.is-active {
+  background: #e2f1ff;
+  color: var(--portal-link-blue);
+}
+
+.portal-nav-link:focus-visible {
+  outline: 3px solid var(--portal-link-blue);
+  outline-offset: 3px;
+}
+
+.portal-reviewer-name {
+  border-radius: 999px;
+  padding: 0.625rem 1rem;
+  background: #e2f1ff;
+  color: var(--portal-link-blue);
+  font-size: var(--portal-text-sm);
+  font-weight: var(--portal-weight-semibold);
+  line-height: var(--portal-leading-body);
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+  .portal-header-content {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding-inline: 1.25rem;
+  }
+  .portal-header-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 720px) {
+  .portal-header-controls {
+    width: 100%;
+  }
+  .portal-nav {
+    flex: 1;
+    min-width: min(100%, 14rem);
+  }
+  .portal-nav-link {
+    min-width: 0;
+    height: 2.25rem;
+    flex: 1;
+    padding-inline: 0.5rem;
+    font-size: var(--portal-text-xs);
+  }
+  .portal-reviewer-name {
+    display: none;
   }
 }

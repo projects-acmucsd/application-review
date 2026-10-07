@@ -32,7 +32,10 @@ import {
   type ReviewStats,
 } from '../lib/reviewApi';
 import { getDefaultReviewDueDate } from '../lib/reviewDefaults';
+import { getReviewDeadlineState } from '../lib/reviewDeadline';
 import { getReviewSettings } from '../lib/settingsApi';
+
+import './Home.css';
 
 const DEFAULT_REVIEW_STATS: ReviewStats = {
   totalDecisions: 0,
@@ -40,10 +43,6 @@ const DEFAULT_REVIEW_STATS: ReviewStats = {
   waitlisted: 0,
   rejected: 0,
 };
-
-function toDateAtEndOfDay(dateValue: string): Date {
-  return new Date(`${dateValue}T23:59:59`);
-}
 
 function hasGoogleAuthRedirectParams(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -103,7 +102,7 @@ function PortalAuthLoader() {
           <div className="h-full w-1/3 rounded-full bg-[linear-gradient(270deg,#ff6f6f,#f9a857_18.75%,#80ce1c_36.98%,#51c0c0_55.73%,#62b0ff_75%,#816dff)] portal-auth-progress" />
         </div>
       </div>
-      <p className="text-sm font-semibold text-neutral-500">
+      <p className="portal-meta text-neutral-500">
         Completing Google sign-in...
       </p>
     </div>
@@ -120,14 +119,10 @@ function DashboardStat({
   value: string;
 }) {
   return (
-    <div className="flex min-h-32 flex-col items-start justify-center px-6 py-6 text-left sm:px-8">
-      <span className={`h-1 w-12 ${accentClassName}`} />
-      <p className="mt-5 text-4xl font-medium leading-none text-[#2f3138]">
-        {value}
-      </p>
-      <p className="mt-3 text-sm font-medium text-neutral-500">
-        {label}
-      </p>
+    <div className="dashboard-stat">
+      <span aria-hidden="true" className={`dashboard-stat__accent ${accentClassName}`} />
+      <dt className="dashboard-stat__label">{label}</dt>
+      <dd className="dashboard-stat__value">{value}</dd>
     </div>
   );
 }
@@ -139,6 +134,7 @@ export default function Home() {
   );
   const [isLoading, setIsLoading] = useState(() => hasGoogleAuthRedirectParams());
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isAdmin, setIsAdmin] = useState(() => hasCachedAdminAccess());
   const [reviewDueDateValue, setReviewDueDateValue] = useState(
     () => getDefaultReviewDueDate(),
@@ -245,6 +241,15 @@ export default function Home() {
     };
   }, [loadDashboardData]);
 
+  useEffect(() => {
+    if (!isSignedIn) {
+      return;
+    }
+
+    const interval = window.setInterval(() => setCurrentDate(new Date()), 60_000);
+    return () => window.clearInterval(interval);
+  }, [isSignedIn]);
+
   const signIn = () => {
     setErrorMessage('');
     void redirectToGoogleSignIn().catch((error: unknown) => {
@@ -285,7 +290,7 @@ export default function Home() {
 
   const loginPanel = (
     <div className="w-full max-w-[560px]">
-      <h1 className="mb-9 text-center text-[2.75rem] font-medium leading-[1.18] text-[#2f3138]">
+      <h1 className="portal-page-title mb-9 text-center text-[#2f3138]">
         ACM Projects
         <br />
         Application Portal
@@ -297,7 +302,7 @@ export default function Home() {
         <div className="space-y-3">
           <button
             onClick={signIn}
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-2xl bg-blue-400 px-4 text-xl font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            className="portal-control portal-control--large flex h-11 w-full items-center justify-center gap-3 rounded-2xl bg-blue-400 px-4 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
           >
             <span className="rounded-full bg-white p-0.5">
               <GoogleIcon />
@@ -307,7 +312,7 @@ export default function Home() {
           {isDevelopmentAuthEnabled() ? (
             <button
               onClick={signInForDevelopment}
-              className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#333] px-4 text-base font-bold text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2"
+              className="portal-control portal-control--large flex h-11 w-full items-center justify-center rounded-2xl bg-[#333] px-4 text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2"
             >
               Use Test Reviewer
             </button>
@@ -316,7 +321,7 @@ export default function Home() {
       )}
 
       {errorMessage ? (
-        <p className="mt-4 rounded-lg border border-[#ff6f6f]/20 bg-[#ff6f6f]/10 px-3 py-2 text-left text-sm font-medium text-[#b83232]">
+        <p className="portal-meta mt-4 rounded-lg border border-[#ff6f6f]/20 bg-[#ff6f6f]/10 px-3 py-2 text-left text-[#b83232]">
           {errorMessage}
         </p>
       ) : null}
@@ -338,43 +343,34 @@ export default function Home() {
     </div>
   );
 
-  const today = new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date());
-  const reviewDueDate = toDateAtEndOfDay(reviewDueDateValue);
+  const { dueDate, daysLeft, hasPassed, remainingPercentage } =
+    getReviewDeadlineState(reviewDueDateValue, currentDate);
   const reviewDueDateLabel = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(reviewDueDate);
-  const daysUntilDue = Math.max(
-    0,
-    Math.ceil((reviewDueDate.getTime() - Date.now()) / 86_400_000),
-  );
-  const deadlineProgress = Math.min(
-    Math.max(((14 - daysUntilDue) / 14) * 100, 8),
-    100,
-  );
+  }).format(dueDate);
+  const deadlineStatusLabel = daysLeft > 0
+    ? `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`
+    : hasPassed ? 'Deadline passed' : 'Due today';
   const dashboardStats = [
     {
-      accentClassName: 'bg-blue-400',
+      accentClassName: 'dashboard-stat__accent--total',
       label: 'Total decisions',
       value: String(reviewStats.totalDecisions),
     },
     {
-      accentClassName: 'bg-emerald-400',
+      accentClassName: 'dashboard-stat__accent--accepted',
       label: 'Accepted',
       value: String(reviewStats.accepted),
     },
     {
-      accentClassName: 'bg-amber-400',
+      accentClassName: 'dashboard-stat__accent--waitlisted',
       label: 'Waitlisted',
       value: String(reviewStats.waitlisted),
     },
     {
-      accentClassName: 'bg-rose-400',
+      accentClassName: 'dashboard-stat__accent--rejected',
       label: 'Rejected',
       value: String(reviewStats.rejected),
     },
@@ -383,85 +379,48 @@ export default function Home() {
   const signedInPage = (
     <InternalShell
       activePath="dashboard"
+      className="dashboard-shell"
       onSignOut={() => void signOut()}
       reviewerName={shellReviewerName}
       showAdmin={isAdmin}
     >
-      <main className="mx-auto min-h-[calc(100vh-5.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
-        <section className="portal-surface p-6 sm:p-8">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.42fr)] lg:items-stretch">
-            <div className="flex min-h-[19rem] flex-col justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#333]">{today}</p>
-                <h1 className="mt-6 max-w-4xl text-4xl font-medium leading-[1.08] text-[#2f3138] sm:text-5xl xl:text-6xl">
-                  Welcome to the Review Portal
-                </h1>
-                <p className="mt-6 max-w-2xl text-base font-medium leading-7 text-neutral-500">
-                  Get to reviewing the applications lil bro
-                </p>
-              </div>
-              <Link
-                to="/review"
-                className="mt-8 inline-flex h-12 w-full items-center justify-center bg-blue-400 px-6 text-base font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 sm:w-fit"
-              >
-                Start Reviewing
+      <main className="dashboard-page">
+        <section className="dashboard-hero" aria-labelledby="dashboard-heading">
+          <div className="dashboard-intro">
+            <h1 id="dashboard-heading" className="dashboard-heading">
+              <span>Projects Application</span>
+              <span className="dashboard-heading__accent">Review Portal</span>
+            </h1>
+            <p className="dashboard-subtitle">
+              Get to reviewing the applications lil bro
+            </p>
+            <div className="dashboard-actions">
+              <Link to="/review" className="dashboard-action dashboard-action--review">
+                Review
+              </Link>
+              <Link to="/rankings" className="dashboard-action dashboard-action--decisions">
+                View Decisions
               </Link>
             </div>
-
-            <aside className="portal-row-band flex min-h-[19rem] flex-col justify-between px-6 py-7 sm:px-8">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
-                  Due date
-                </p>
-                <h2 className="mt-4 text-4xl font-medium leading-tight text-[#2f3138]">
-                  {reviewDueDateLabel}
-                </h2>
-              </div>
-              <div>
-                <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] text-neutral-400">
-                  <span>{daysUntilDue} days left</span>
-                  <span>Review deadline</span>
-                </div>
-                <div className="h-2 overflow-hidden bg-neutral-100">
-                  <div
-                    className="h-full bg-blue-400"
-                    style={{ width: `${deadlineProgress}%` }}
-                  />
-                </div>
-              </div>
-            </aside>
           </div>
-        </section>
 
-        <section className="portal-surface-quiet mt-8 px-6 py-7 sm:px-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-3xl font-medium text-[#2f3138]">
-                Application Ratings
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-neutral-500">
-                Ranked candidates sorted by rating, then alphabetically.
-              </p>
-            </div>
-            <Link
-              to="/rankings"
-              className="inline-flex h-12 w-full items-center justify-center bg-[#2f3138] px-6 text-base font-bold text-white transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#2f3138] focus:ring-offset-2 sm:w-28"
-            >
-              View
-            </Link>
-          </div>
-        </section>
-
-        <section className="portal-surface-quiet mt-8 overflow-hidden">
-          <div className="px-6 pb-3 sm:px-8">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
-              Decision overview
-            </p>
-            <h2 className="mt-2 text-3xl font-medium text-[#2f3138]">
-              Review Outcomes
+          <aside className="dashboard-deadline" aria-label="Review deadline">
+            <h2 className="dashboard-deadline__date">
+              <time dateTime={reviewDueDateValue}>{reviewDueDateLabel}</time>
             </h2>
-          </div>
-          <div className="grid divide-y divide-neutral-200/70 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+            <p className="dashboard-deadline__status">{deadlineStatusLabel}</p>
+            <progress
+              className="dashboard-deadline__progress"
+              aria-label="Review time remaining"
+              aria-valuetext={deadlineStatusLabel}
+              max={100}
+              value={remainingPercentage}
+            />
+          </aside>
+        </section>
+
+        <section className="dashboard-summary" aria-label="Review decisions">
+          <dl className="dashboard-stats">
             {dashboardStats.map((stat) => (
               <DashboardStat
                 accentClassName={stat.accentClassName}
@@ -470,29 +429,7 @@ export default function Home() {
                 value={stat.value}
               />
             ))}
-          </div>
-        </section>
-
-        <section className="portal-surface-quiet mt-10 px-6 py-7 sm:px-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(220px,auto)] lg:items-center">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
-                Workflow
-              </p>
-              <h2 className="mt-2 text-3xl font-medium text-[#2f3138]">
-                Continue the application queue
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-neutral-500">
-                Jump back into reviews without changing the current Google Sheet source.
-              </p>
-            </div>
-            <Link
-              to="/review"
-              className="inline-flex h-12 w-full items-center justify-center bg-blue-400 px-6 text-base font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 sm:w-52"
-            >
-              Open Applications
-            </Link>
-          </div>
+          </dl>
         </section>
       </main>
     </InternalShell>
@@ -503,6 +440,7 @@ export default function Home() {
       {shouldShowDashboardSkeleton ? (
         <InternalShell
           activePath="dashboard"
+          className="dashboard-shell"
           onSignOut={() => void signOut()}
           reviewerName={shellReviewerName}
           showAdmin={isAdmin}

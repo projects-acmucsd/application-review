@@ -5,7 +5,6 @@ import { ApplicationFiltersPopover } from '../components/ApplicationFiltersPopov
 import {
   filterRowsByApplicationFilters,
   getBinaryQuestions,
-  getReviewPage,
   readApplicationFilters,
   readQueueScope,
   writeApplicationFilters,
@@ -50,6 +49,7 @@ import {
   type ReviewDecision,
 } from '../lib/reviewApi';
 import type { ApplicationSourceSettings } from '../lib/settingsApi';
+import { getReviewSelectionIndex } from '../lib/reviewNavigation';
 import {
   EMPTY_REVIEW_EDITOR,
   reviewEditorReducer,
@@ -513,7 +513,12 @@ export default function GoogleSheetViewer() {
     const filtered = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
     setFilteredRows(filtered);
 
-    const row = filtered[getReviewPage(searchParams, filtered.length) - 1];
+    const selectionIndex = getReviewSelectionIndex({
+      rows: filtered,
+      applicationId: searchParams.get('application'),
+      page: searchParams.get('q'),
+    });
+    const row = filtered[selectionIndex];
     if (row) {
       setApplicationId(getApplicationId(row));
       if (!lastFetchedRow.current || lastFetchedRow.current.index !== row.index) {
@@ -867,7 +872,7 @@ export default function GoogleSheetViewer() {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-semibold text-blue-600 underline decoration-blue-200 underline-offset-4 hover:text-blue-700"
+          className="text-blue-600 underline decoration-blue-200 underline-offset-4 hover:text-blue-700"
         >
           {part}
         </a>
@@ -886,7 +891,12 @@ export default function GoogleSheetViewer() {
   };
 
   const activeQueueFilter = readQueueScope(searchParams);
-  const currentPage = getReviewPage(searchParams, filteredRows.length);
+  const selectionIndex = getReviewSelectionIndex({
+    rows: filteredRows,
+    applicationId: searchParams.get('application'),
+    page: searchParams.get('q'),
+  });
+  const currentPage = selectionIndex + 1;
   const applicantName = currentRow[2] || 'Loading applicant';
   const firstChoiceTrack = getFirstChoiceTrack(headers, currentRow);
   const firstChoice = firstChoiceTrack
@@ -901,6 +911,7 @@ export default function GoogleSheetViewer() {
 
   const createReviewHref = (page: number) => {
     const params = new URLSearchParams(searchParams);
+    params.delete('application');
     params.set('q', String(page));
     return `/review?${params.toString()}`;
   };
@@ -946,14 +957,15 @@ export default function GoogleSheetViewer() {
     .filter(Boolean)
     .join(' ');
   const hasReviewLoadError = Boolean(reviewLoadError);
+  const hasUnavailableApplication = searchParams.has('application') && selectionIndex === -1;
   const hasEmptyFilteredQueue =
-    !hasReviewLoadError && !isReviewLoading && !filteredRows.length;
-  const emptyQueueTitle =
-    hasNoAssignments
-      ? 'No assigned applications'
-      : 'No matching applications';
-  const emptyQueueDescription =
-    hasNoAssignments
+    !hasReviewLoadError && !isReviewLoading && (!filteredRows.length || hasUnavailableApplication);
+  const emptyQueueTitle = hasUnavailableApplication
+    ? 'Application unavailable'
+    : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
+  const emptyQueueDescription = hasUnavailableApplication
+    ? 'This application is not available in the current queue. Choose All applications to continue.'
+    : hasNoAssignments
       ? 'There are no applications assigned to you right now.'
       : 'No applications match the current filter.';
 
@@ -968,18 +980,18 @@ export default function GoogleSheetViewer() {
       {showConflictWarning && newData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="portal-surface w-full max-w-lg rounded-[1.5rem] p-6">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-500">
+            <p className="portal-eyebrow text-blue-500">
               Data refresh
             </p>
-            <h3 className="mt-2 text-2xl font-bold text-[#333]">
+            <h3 className="portal-subheading mt-2 text-[#333]">
               New data available
             </h3>
-            <p className="mt-3 text-sm leading-6 text-neutral-600">
+            <p className="portal-body mt-3 text-neutral-600">
               New data was detected while you were editing. Copy your current
               comment before refreshing if you need to preserve it.
             </p>
-            <div className="mt-4 rounded-2xl bg-neutral-100 p-4 text-sm text-neutral-700">
-              <pre className="whitespace-pre-wrap">{commentText}</pre>
+            <div className="portal-body mt-4 rounded-2xl bg-neutral-100 p-4 text-neutral-700">
+              <pre className="portal-body whitespace-pre-wrap font-sans">{commentText}</pre>
             </div>
             <div className="mt-5 flex justify-end">
               <button
@@ -993,7 +1005,7 @@ export default function GoogleSheetViewer() {
                     legacyComment: getReviewerCommentValue(headers, newData),
                   });
                 }}
-                className="bg-blue-400 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                className="portal-control bg-blue-400 px-5 py-2 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
               >
                 Refresh Data
               </button>
@@ -1022,7 +1034,7 @@ export default function GoogleSheetViewer() {
                         key={filter.key}
                         to={createQueueFilterHref(filter.key)}
                         aria-current={isActive ? 'page' : undefined}
-                        className={`portal-square-control border px-3 py-2 text-xs font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                        className={`portal-control portal-square-control border px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                           isActive
                             ? 'border-blue-300 bg-blue-50 text-blue-700'
                             : 'border-neutral-200 bg-transparent text-neutral-500 hover:bg-blue-50 hover:text-blue-600'
@@ -1043,7 +1055,7 @@ export default function GoogleSheetViewer() {
           ) : null}
 
           {reviewDataWarning && !hasReviewLoadError ? (
-            <p className="portal-square-field mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            <p className="portal-meta portal-square-field mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
               {reviewDataWarning}
             </p>
           ) : null}
@@ -1053,34 +1065,40 @@ export default function GoogleSheetViewer() {
               <ReviewSummarySkeleton />
             ) : hasReviewLoadError ? (
               <section className="portal-surface-quiet p-8 text-center">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                <p className="portal-eyebrow text-blue-500">
                   Application review
                 </p>
-                <h1 className="mt-3 text-4xl font-medium text-[#2f3138]">
+                <h1 className="portal-page-title mt-3 text-[#2f3138]">
                   Unable to load applications
                 </h1>
-                <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-neutral-500">
+                <p className="portal-meta mx-auto mt-3 max-w-2xl text-neutral-500">
                   {reviewLoadError}
                 </p>
                 <button
                   type="button"
                   onClick={() => void fetchSheetData()}
-                  className="portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-base font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                  className="portal-control portal-control--large portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
                 >
                   Retry
                 </button>
               </section>
             ) : hasEmptyFilteredQueue ? (
               <section className="portal-surface-quiet p-8 text-center">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                <p className="portal-eyebrow text-blue-500">
                   Application review
                 </p>
-                <h1 className="mt-3 text-5xl font-medium text-[#2f3138]">
+                <h1 className="portal-page-title mt-3 text-[#2f3138]">
                   {emptyQueueTitle}
                 </h1>
-                <p className="mx-auto mt-3 max-w-xl text-sm font-semibold leading-6 text-neutral-500">
+                <p className="portal-meta mx-auto mt-3 max-w-xl text-neutral-500">
                   {emptyQueueDescription}
                 </p>
+                {hasUnavailableApplication ? (
+                  <Link to={createQueueFilterHref('all')}
+                    className="portal-control portal-control--large portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+                    All applications
+                  </Link>
+                ) : null}
               </section>
             ) : (
               <section className="portal-surface p-6 sm:p-8">
@@ -1088,24 +1106,24 @@ export default function GoogleSheetViewer() {
                   <div className="flex min-h-[15rem] h-full flex-col justify-between">
                     <div className="flex flex-col items-start text-left">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+                        <p className="portal-eyebrow text-blue-500">
                           Application review
                         </p>
-                        <h1 className="mt-3 max-w-4xl text-4xl font-medium leading-tight text-[#2f3138] sm:text-5xl">
+                        <h1 className="portal-page-title mt-3 max-w-4xl text-[#2f3138]">
                           {applicantName}
                         </h1>
                       </div>
                     </div>
                     <div className="mt-8 grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-400">
+                        <p className="portal-eyebrow text-neutral-400">
                           First choice
                         </p>
-                        <p className="mt-1 text-2xl font-bold text-blue-500">
+                        <p className="portal-subheading mt-1 text-blue-500">
                           {firstChoice}
                         </p>
                       </div>
-                      <span className="inline-flex w-fit items-center bg-[#333] px-4 py-2 text-sm font-bold text-white">
+                      <span className="portal-label inline-flex w-fit items-center bg-[#333] px-4 py-2 text-white">
                         {filteredRows.length
                           ? `Application ${currentPage} of ${filteredRows.length}`
                           : 'Loading queue'}
@@ -1116,10 +1134,10 @@ export default function GoogleSheetViewer() {
                   <div className="portal-row-band min-w-0 px-6 py-5 sm:px-8">
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div>
-                        <p className="text-3xl font-bold text-[#333]">
+                        <p className="portal-metric portal-metric--compact text-[#333]">
                           {filteredRows.length ? currentPage : '-'}
                         </p>
-                        <p className="text-xs font-semibold text-neutral-500">
+                        <p className="portal-meta text-neutral-500">
                           of {filteredRows.length || '-'} applications
                         </p>
                       </div>
@@ -1131,7 +1149,7 @@ export default function GoogleSheetViewer() {
                       />
                     </div>
 
-                    <p className="mt-5 text-xs font-bold uppercase tracking-[0.22em] text-neutral-400">
+                    <p className="portal-eyebrow mt-5 text-neutral-400">
                       Sections
                     </p>
                     <div className="mt-3 grid w-full gap-2 sm:grid-cols-2 2xl:grid-cols-3">
@@ -1179,10 +1197,10 @@ export default function GoogleSheetViewer() {
                               }`}
                             />
                             <span>
-                              <span className="block text-sm font-bold">
+                              <span className="portal-label block">
                                 {section.title}
                               </span>
-                              <span className="text-xs font-semibold text-neutral-400">
+                              <span className="portal-meta text-neutral-400">
                                 {statusLabel}
                               </span>
                             </span>
@@ -1210,10 +1228,10 @@ export default function GoogleSheetViewer() {
                     <div className="flex items-center gap-3">
                       <span className={`h-4 w-4 rounded-full ${selectedAnswerSection.accent}`} />
                       <div>
-                        <h2 className="text-3xl font-medium text-[#2f3138]">
+                        <h2 className="portal-section-title text-[#2f3138]">
                           {selectedAnswerSection.title}
                         </h2>
-                        <p className="text-sm font-semibold text-neutral-400">
+                        <p className="portal-meta text-neutral-400">
                           {selectedAnswerSection.priorityLabel ||
                             `${selectedAnswerSection.count} prompts`}
                         </p>
@@ -1230,10 +1248,10 @@ export default function GoogleSheetViewer() {
                             key={`${selectedAnswerSection.key}-${rowIndex}`}
                             className="grid gap-4 py-5 transition-colors hover:bg-[#f8fbff] md:grid-cols-[minmax(180px,0.42fr)_minmax(0,0.58fr)]"
                           >
-                            <h3 className="whitespace-pre-wrap text-sm font-bold leading-6 text-[#333]">
+                            <h3 className="portal-question whitespace-pre-wrap text-[#333]">
                               {question}
                             </h3>
-                            <div className="whitespace-pre-wrap text-sm leading-7 text-neutral-700">
+                            <div className="portal-answer whitespace-pre-wrap text-neutral-700">
                               {answer ? (
                                 linkifyText(answer)
                               ) : (
@@ -1384,10 +1402,10 @@ function ReviewPanel({
         <section className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-500">
+              <p className="portal-eyebrow text-blue-500">
                 Review
               </p>
-              <h2 className="mt-1 text-2xl font-bold text-[#333]">
+              <h2 className="portal-card-title mt-1 text-[#333]">
                 Rating
               </h2>
             </div>
@@ -1396,7 +1414,7 @@ function ReviewPanel({
                 <button
                   disabled={isSaving}
                   onClick={onReset}
-                  className="bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-600 transition-colors hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="portal-control bg-neutral-100 px-4 py-2 text-neutral-600 transition-colors hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1404,7 +1422,7 @@ function ReviewPanel({
                   aria-busy={isSaving}
                   disabled={isSaving || !isReady}
                   onClick={() => void saveComment()}
-                  className="min-w-20 bg-[#333] px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+                  className="portal-control min-w-20 bg-[#333] px-4 py-2 text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
                 >
                   {isSaving ? 'Saving...' : 'Save'}
                 </button>
@@ -1423,9 +1441,9 @@ function ReviewPanel({
               aria-live="polite"
               className="mt-4 border border-blue-100 bg-blue-50 px-4 py-3"
             >
-              <div className="flex items-center justify-between gap-4 text-sm font-bold text-blue-600">
+              <div className="portal-label flex items-center justify-between gap-4 text-blue-600">
                 <span>Saving review</span>
-                <span className="text-xs uppercase tracking-[0.18em] text-blue-400">
+                <span className="portal-label text-blue-400">
                   Please wait
                 </span>
               </div>
@@ -1448,7 +1466,7 @@ function ReviewPanel({
                     aria-pressed={selectedRating === score}
                     disabled={isSaving || !isReady}
                     onClick={() => onRatingChange(score)}
-                    className={`portal-square-control flex h-8 w-8 items-center justify-center text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
+                    className={`portal-control portal-control--compact portal-square-control flex h-8 w-8 items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                       selectedRating === score
                         ? 'scale-110 bg-blue-500 text-white shadow-md shadow-blue-200'
                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
@@ -1471,7 +1489,7 @@ function ReviewPanel({
                     aria-pressed={isSelected}
                     disabled={isSaving || !isReady}
                     onClick={() => onDecisionChange(option.decision)}
-                    className={`portal-square-control h-9 border px-3 text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
+                    className={`portal-control portal-square-control h-9 border px-3 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
                       isSelected
                         ? option.selectedClassName
                         : option.unselectedClassName
@@ -1495,14 +1513,14 @@ function ReviewPanel({
               setLastRemoteSave(null);
               onDraftChange(event.target.value);
             }}
-            className="portal-muted-field mt-5 h-56 w-full resize-none border p-4 text-sm leading-7 text-neutral-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-70"
+            className="portal-answer portal-muted-field mt-5 h-56 w-full resize-none border p-4 text-neutral-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-70"
             placeholder="Enter review comments, notes, and decision context here..."
           />
         </section>
 
         <div className="flex min-h-56 flex-col gap-3 border-t border-neutral-200/70 pt-6 lg:h-full lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <div className="text-center">
-            <p className="text-xl font-bold text-[#333]">
+            <p className="portal-subheading text-[#333]">
               {filteredCount ? `${currentPage} of ${filteredCount}` : 'Loading queue'}
             </p>
           </div>
@@ -1510,24 +1528,24 @@ function ReviewPanel({
             {hasNext && nextHref && !isSaving ? (
               <Link
                 to={nextHref}
-                className="flex min-h-20 w-full items-center justify-center bg-blue-400 px-4 text-lg font-bold text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-blue-400 px-4 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
               >
                 Next
               </Link>
             ) : (
-              <span className="flex min-h-20 w-full items-center justify-center bg-neutral-100 px-4 text-lg font-bold text-neutral-300">
+              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-neutral-100 px-4 text-neutral-300">
                 Next
               </span>
             )}
             {hasPrevious && previousHref && !isSaving ? (
               <Link
                 to={previousHref}
-                className="flex min-h-20 w-full items-center justify-center border border-blue-100 bg-white px-4 text-lg font-bold text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-blue-100 bg-white px-4 text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
                 Prev
               </Link>
             ) : (
-              <span className="flex min-h-20 w-full items-center justify-center border border-neutral-100 bg-neutral-50 px-4 text-lg font-bold text-neutral-300">
+              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-neutral-100 bg-neutral-50 px-4 text-neutral-300">
                 Prev
               </span>
             )}

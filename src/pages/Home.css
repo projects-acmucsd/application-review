@@ -1,0 +1,333 @@
+.dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.dashboard-shell > .portal-internal-header {
+  flex-shrink: 0;
+}
+
+.dashboard-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  width: min(calc(100% - 4rem), 1260px);
+  margin-inline: auto;
+  padding-block: 4rem;
+  color: var(--portal-charcoal, #333);
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  padding-inline: 1rem;
+}
+
+.dashboard-intro {
+  min-width: 0;
+}
+
+.dashboard-heading {
+  margin: 0;
+  font-size: var(--portal-display-size);
+  font-weight: var(--portal-weight-bold);
+  letter-spacing: -0.035em;
+  line-height: var(--portal-leading-title);
+}
+
+.dashboard-heading > span {
+  display: block;
+}
+
+.dashboard-heading__accent {
+  color: var(--portal-brand-blue, #62b0ff);
+}
+
+.dashboard-subtitle {
+  margin: 1rem 0 0;
+  color: var(--portal-muted, #666);
+  font-size: clamp(var(--portal-text-lg), 1.8vw, var(--portal-text-xl));
+  font-weight: var(--portal-weight-regular);
+  line-height: var(--portal-leading-body);
+}
+
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.125rem;
+  margin-top: 2rem;
+}
+
+.dashboard-action {
+  display: inline-flex;
+  min-width: 12.5rem;
+  height: 3.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  padding-inline: 2rem;
+  color: #fff;
+  font-size: var(--portal-text-base);
+  font-weight: var(--portal-weight-semibold);
+  line-height: var(--portal-leading-body);
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.dashboard-action:focus-visible {
+  outline: 3px solid var(--portal-link-blue, #2475bb);
+  outline-offset: 4px;
+}
+
+.dashboard-action--review {
+  background: var(--portal-brand-blue, #62b0ff);
+  color: #172b41;
+}
+
+.dashboard-action--review:hover {
+  background: #4b9ae8;
+}
+
+.dashboard-action--decisions {
+  min-width: 15.75rem;
+  background: var(--portal-charcoal, #333);
+}
+
+.dashboard-action--decisions:hover {
+  background: #202126;
+}
+
+.dashboard-deadline {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid #cbd1da;
+  padding: 2rem 0 2rem 3rem;
+}
+
+.dashboard-deadline__date {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.78vw, 2.5rem);
+  font-weight: var(--portal-weight-bold);
+  letter-spacing: var(--portal-tracking-title);
+  line-height: 1.2;
+}
+
+.dashboard-deadline__status {
+  margin: 1rem 0 0;
+  color: var(--portal-muted, #666);
+  font-size: var(--portal-text-base);
+  line-height: var(--portal-leading-body);
+}
+
+.dashboard-deadline__progress {
+  display: block;
+  width: 100%;
+  height: 1rem;
+  overflow: hidden;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  margin-top: 1.125rem;
+  background: #dfe3e9;
+  color: var(--portal-brand-blue, #62b0ff);
+}
+
+.dashboard-deadline__progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #dfe3e9;
+}
+
+.dashboard-deadline__progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--portal-brand-blue, #62b0ff);
+}
+
+.dashboard-deadline__progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--portal-brand-blue, #62b0ff);
+}
+
+.dashboard-summary {
+  border-top: 1px solid #cbd1da;
+  margin-top: 3.5rem;
+  padding-block: 2.5rem 0;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.dashboard-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-left: 1px solid #cbd1da;
+  padding-inline: 2.25rem;
+}
+
+.dashboard-stat:first-child {
+  border-left: 0;
+  padding-left: 1rem;
+}
+
+.dashboard-stat__accent {
+  width: 3.25rem;
+  height: 0.3125rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+
+.dashboard-stat__accent--total { background: var(--portal-brand-blue, #62b0ff); }
+.dashboard-stat__accent--accepted { background: #34b822; }
+.dashboard-stat__accent--waitlisted { background: #ff9f24; }
+.dashboard-stat__accent--rejected { background: #ff6f6f; }
+
+.dashboard-stat__value {
+  order: 1;
+  margin: 0;
+  font-size: var(--portal-metric-size);
+  font-weight: var(--portal-weight-bold);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-stat__label {
+  order: 2;
+  margin-top: 0.5rem;
+  color: var(--portal-muted, #666);
+  font-size: var(--portal-text-base);
+  line-height: var(--portal-leading-body);
+}
+
+@media (max-width: 1100px) {
+  .dashboard-hero {
+    gap: 2rem;
+  }
+
+  .dashboard-action {
+    min-width: 9rem;
+    height: 3.25rem;
+    padding-inline: 1.5rem;
+    font-size: var(--portal-text-base);
+  }
+
+  .dashboard-action--decisions {
+    min-width: 12rem;
+  }
+
+  .dashboard-deadline {
+    padding-left: 2rem;
+  }
+
+  .dashboard-stat {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-page {
+    padding-block: 3rem;
+  }
+
+  .dashboard-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+
+  .dashboard-heading {
+    font-size: clamp(2.5rem, 6vw, 3.5rem);
+  }
+
+  .dashboard-deadline {
+    border-top: 1px solid #cbd1da;
+    border-left: 0;
+    padding: 2rem 0 0;
+  }
+
+  .dashboard-deadline__progress {
+    max-width: 32rem;
+  }
+
+  .dashboard-summary {
+    margin-top: 2.5rem;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem 0;
+  }
+
+  .dashboard-stat:nth-child(odd) {
+    border-left: 0;
+    padding-left: 1rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .dashboard-page {
+    width: calc(100% - 2.5rem);
+    padding-block: 2.5rem;
+  }
+
+  .dashboard-hero {
+    padding-inline: 0;
+  }
+
+  .dashboard-heading {
+    font-size: clamp(1.75rem, 8.3vw, 2.75rem);
+  }
+
+  .dashboard-subtitle {
+    font-size: var(--portal-text-lg);
+  }
+
+  .dashboard-actions {
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .dashboard-action,
+  .dashboard-action--decisions {
+    min-width: 0;
+    height: 3rem;
+    flex: 1;
+    padding-inline: 0.75rem;
+    font-size: var(--portal-text-base);
+  }
+
+  .dashboard-deadline__date {
+    font-size: 1.75rem;
+  }
+
+  .dashboard-deadline__progress {
+    height: 0.75rem;
+  }
+
+  .dashboard-stat,
+  .dashboard-stat:first-child,
+  .dashboard-stat:nth-child(odd) {
+    padding-inline: 1.25rem;
+  }
+
+  .dashboard-stat:nth-child(odd) {
+    padding-left: 0;
+  }
+
+  .dashboard-stat__value {
+    font-size: 2.5rem;
+  }
+
+  .dashboard-stat__label {
+    font-size: var(--portal-text-base);
+  }
+}

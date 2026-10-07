@@ -75,6 +75,7 @@ export function writeApplicationFilters(params: URLSearchParams, filters: Applic
   // Canonicalize old track links while retaining the independent Assigned scope.
   if (readQueueScope(params) === 'assignedToMe') next.set('filter', 'assignedToMe');
   else next.delete('filter');
+  next.delete('application');
   next.delete('name');
   next.delete('firstChoice');
   next.delete('answer');

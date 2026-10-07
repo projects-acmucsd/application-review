@@ -82,74 +82,30 @@ export function LoginAuthSkeleton() {
 
 export function DashboardSkeleton() {
   return (
-    <main
-      aria-label="Loading dashboard"
-      className="mx-auto min-h-[calc(100vh-5.275rem)] max-w-[1500px] px-5 py-8 sm:px-8"
-    >
-      <section className="portal-surface p-6 sm:p-8">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.42fr)] lg:items-stretch">
-          <div className="flex min-h-[19rem] flex-col justify-between">
-            <div>
-              <SkeletonLine className="w-40" />
-              <SkeletonBlock className="mt-6 !h-28 w-full !max-w-[48rem] !rounded-xl" />
-              <SkeletonLine className="mt-6 w-3/4 max-w-[34rem]" />
-            </div>
-            <SkeletonLine className="mt-8 !h-12 w-full sm:w-44" />
+    <main aria-label="Loading dashboard" aria-busy="true" className="dashboard-page">
+      <section className="dashboard-hero" aria-hidden="true">
+        <div>
+          <SkeletonBlock className="!h-28 max-w-[36rem]" />
+          <SkeletonLine className="mt-6 w-4/5" />
+          <div className="dashboard-actions">
+            <SkeletonBlock className="!h-14 w-44" /><SkeletonBlock className="!h-14 w-56" />
           </div>
-
-          <div className="portal-row-band flex min-h-[19rem] flex-col justify-between px-6 py-7 sm:px-8">
-            <div>
-              <SkeletonLine className="w-24" />
-              <SkeletonLine className="mt-4 !h-10 w-48" />
-            </div>
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <SkeletonLine className="w-24" />
-                <SkeletonLine className="w-36" />
-              </div>
-              <SkeletonLine className="!h-2 w-full" />
-            </div>
-          </div>
+        </div>
+        <div className="dashboard-deadline">
+          <SkeletonBlock className="!h-10 w-64" />
+          <SkeletonLine className="mt-5 w-28" />
+          <SkeletonLine className="mt-5 w-full" />
         </div>
       </section>
-
-      <section className="portal-surface-quiet mt-8 px-6 py-7 sm:px-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="w-full max-w-2xl">
-            <SkeletonLine className="!h-8 w-full max-w-md" />
-            <SkeletonLine className="mt-3 w-3/4 max-w-xl" />
-          </div>
-          <SkeletonLine className="!h-12 w-full sm:w-28" />
-        </div>
-      </section>
-
-      <section className="portal-surface-quiet mt-8 overflow-hidden">
-        <div className="px-6 pb-3 sm:px-8">
-          <SkeletonLine className="w-32" />
-          <SkeletonLine className="mt-3 !h-8 w-64" />
-        </div>
-        <div className="grid divide-y divide-neutral-200/70 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div
-              key={index}
-              className="flex min-h-32 flex-col justify-center px-5 py-6"
-            >
+      <section className="dashboard-summary" aria-hidden="true">
+        <div className="dashboard-stats">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="dashboard-stat">
               <SkeletonLine className="!h-1 w-12" />
-              <SkeletonLine className="!h-9 w-14" />
-              <SkeletonLine className="mt-4 w-32" />
+              <SkeletonBlock className="mt-4 !h-10 w-12" />
+              <SkeletonLine className="mt-3 w-28" />
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="portal-surface-quiet mt-10 px-6 py-7 sm:px-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(220px,auto)] lg:items-center">
-          <div className="w-full max-w-2xl">
-            <SkeletonLine className="w-24" />
-            <SkeletonLine className="mt-3 !h-8 w-full max-w-md" />
-            <SkeletonLine className="mt-3 w-3/4 max-w-xl" />
-          </div>
-          <SkeletonLine className="!h-12 w-full sm:w-52" />
         </div>
       </section>
     </main>
