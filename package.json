@@ -11,15 +11,17 @@
     "build:backend": "tsc -b tsconfig.backend.json --force",
     "typecheck": "tsc -b --pretty false",
     "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit",
-    "test": "npm run test:backend && npm run test:sheet && npm run test:review",
+    "test": "npm run test:backend && npm run test:sheet && npm run test:review && npm run test:filters",
     "test:backend": "npm run build:backend && node --test backend/dist/modules/**/*.test.js",
     "test:sheet": "tsx --test tests/googleSheetData.test.ts",
     "test:review": "node --import tsx --test tests/reviewEditor.test.ts",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start:backend": "node backend/dist/index.js"
+    "start:backend": "node backend/dist/index.js",
+    "test:filters": "tsx --test tests/applicationFilters.test.ts"
   },
   "dependencies": {
+    "@radix-ui/react-icons": "^1.3.2",
     "@supabase/supabase-js": "^2.57.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

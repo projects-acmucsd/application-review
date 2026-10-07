@@ -1,6 +1,15 @@
-import { useEffect, useState, useRef, useCallback, useReducer } from 'react';
+import { useEffect, useState, useRef, useCallback, useReducer, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ApplicationFiltersPopover } from '../components/ApplicationFiltersPopover';
+import {
+  filterRowsByApplicationFilters,
+  getBinaryQuestions,
+  getReviewPage,
+  readApplicationFilters,
+  readQueueScope,
+  writeApplicationFilters,
+} from '../lib/applicationFilters';
 import { InternalShell } from '../components/InternalShell';
 import {
   ReviewAnswersSkeleton,
@@ -69,13 +78,7 @@ interface RemoteCommentUpdate {
 
 type CollaborationStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 type SectionKey = SheetSectionKey;
-type QueueFilterKey =
-  | 'all'
-  | 'ai'
-  | 'assignedToMe'
-  | 'design'
-  | 'robotics'
-  | 'hack';
+type QueueFilterKey = 'all' | 'assignedToMe';
 
 interface ReviewSection {
   accent: string;
@@ -94,11 +97,7 @@ const QUEUE_FILTERS: Array<{
   label: string;
 }> = [
   { key: 'all', label: 'All' },
-  { key: 'ai', label: 'AI priority' },
-  { key: 'design', label: 'Design priority' },
-  { key: 'hack', label: 'Hack priority' },
-  { key: 'robotics', label: 'Robotics priority' },
-  { key: 'assignedToMe', label: 'Assigned to me' },
+  { key: 'assignedToMe', label: 'Assigned' },
 ];
 
 const SECTION_CONFIGS: Array<{
@@ -165,33 +164,11 @@ function createReviewerIdentity(profile: GoogleProfile): ReviewerIdentity {
   };
 }
 
-function normalizeTrackName(value: string): QueueFilterKey | null {
-  const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');
-
-  const track = normalizeSheetTrackName(value);
-  if (track) return track;
-  if (normalized === 'assignedtome' || normalized === 'mine') {
-    return 'assignedToMe';
-  }
-  if (normalized === 'all') return 'all';
-
-  return null;
-}
-
 function getSectionTitle(sectionKey: SectionKey): string {
   return (
     SECTION_CONFIGS.find((section) => section.key === sectionKey)?.title ??
     'Unspecified'
   );
-}
-
-function getFirstChoicePriority(
-  headers: string[],
-  row: SheetRow,
-): QueueFilterKey | null {
-  const firstChoice = getFirstChoiceTrack(headers, row.data);
-
-  return firstChoice;
 }
 
 function getReviewerCommentValue(headers: string[], rowData: string[]): string {
@@ -295,26 +272,16 @@ function filterRowsByQueueFilter({
   assignments,
   filter,
   headers,
-  legacyFirstChoiceFilter,
   reviewer,
   rows,
-  useLegacyFirstChoiceFilter,
 }: {
   assignmentFallbackEnabled: boolean;
   assignments: ApplicationAssignment[];
   filter: QueueFilterKey;
   headers: string[];
-  legacyFirstChoiceFilter: QueueFilterKey | null;
   reviewer: ReviewerIdentity | null;
   rows: SheetRow[];
-  useLegacyFirstChoiceFilter: boolean;
 }) {
-  if (useLegacyFirstChoiceFilter && legacyFirstChoiceFilter) {
-    return rows.filter(
-      (row) => getFirstChoicePriority(headers, row) === filter,
-    );
-  }
-
   if (filter === 'all') {
     return rows;
   }
@@ -329,7 +296,7 @@ function filterRowsByQueueFilter({
     return rows.filter((row) => isAssignedToReviewer(row, headers, reviewer));
   }
 
-  return rows.filter((row) => getFirstChoicePriority(headers, row) === filter);
+  return rows;
 }
 
 export default function GoogleSheetViewer() {
@@ -347,7 +314,12 @@ export default function GoogleSheetViewer() {
     return storedProfile ? createReviewerIdentity(storedProfile) : null;
   });
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const binaryQuestions = useMemo(
+    () => getBinaryQuestions(headers, allRows),
+    [headers, allRows],
+  );
+  const appliedFilters = readApplicationFilters(searchParams);
   const [editor, dispatchEditor] = useReducer(
     reviewEditorReducer,
     EMPTY_REVIEW_EDITOR,
@@ -527,26 +499,21 @@ export default function GoogleSheetViewer() {
   }, [fetchApplicationReviews, fetchAssignments, fetchSheetData, navigate]);
 
   useEffect(() => {
-    const filterParam = searchParams.get('filter');
-    const legacyNameFilter = normalizeTrackName(searchParams.get('name') || '');
-    const activeFilter = normalizeTrackName(filterParam || '') ?? legacyNameFilter ?? 'all';
-    const pageParam = parseInt(searchParams.get('q') || '1', 10) - 1;
-    const useLegacyFirstChoiceFilter = Boolean(!filterParam && legacyNameFilter);
+    const activeFilter = readQueueScope(searchParams);
 
-    const filtered = filterRowsByQueueFilter({
+    const scopedRows = filterRowsByQueueFilter({
       assignmentFallbackEnabled,
       assignments,
       filter: activeFilter,
       headers,
-      legacyFirstChoiceFilter: legacyNameFilter,
       reviewer,
       rows: allRows,
-      useLegacyFirstChoiceFilter,
     });
 
+    const filtered = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
     setFilteredRows(filtered);
 
-    const row = filtered[pageParam];
+    const row = filtered[getReviewPage(searchParams, filtered.length) - 1];
     if (row) {
       setApplicationId(getApplicationId(row));
       if (!lastFetchedRow.current || lastFetchedRow.current.index !== row.index) {
@@ -918,12 +885,8 @@ export default function GoogleSheetViewer() {
     navigate('/');
   };
 
-  const filterParam = searchParams.get('filter');
-  const nameFilter = searchParams.get('name');
-  const legacyNameFilter = normalizeTrackName(nameFilter || '');
-  const activeQueueFilter =
-    normalizeTrackName(filterParam || '') ?? legacyNameFilter ?? 'all';
-  const currentPage = Math.max(parseInt(searchParams.get('q') || '1', 10), 1);
+  const activeQueueFilter = readQueueScope(searchParams);
+  const currentPage = getReviewPage(searchParams, filteredRows.length);
   const applicantName = currentRow[2] || 'Loading applicant';
   const firstChoiceTrack = getFirstChoiceTrack(headers, currentRow);
   const firstChoice = firstChoiceTrack
@@ -937,39 +900,32 @@ export default function GoogleSheetViewer() {
     : 0;
 
   const createReviewHref = (page: number) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams);
     params.set('q', String(page));
-    if (filterParam) {
-      params.set('filter', filterParam);
-    } else if (nameFilter) {
-      params.set('name', nameFilter);
-    }
     return `/review?${params.toString()}`;
   };
 
   const createQueueFilterHref = (filter: QueueFilterKey) => {
-    const params = new URLSearchParams();
-    params.set('q', '1');
-
-    if (filter !== 'all') {
-      params.set('filter', filter);
-    }
-
-    const queryString = params.toString();
-    return `/review${queryString ? `?${queryString}` : ''}`;
+    const params = writeApplicationFilters(searchParams, appliedFilters);
+    if (filter === 'assignedToMe') params.set('filter', filter);
+    else params.delete('filter');
+    return `/review?${params.toString()}`;
   };
 
+  const getQueueRows = (filter: QueueFilterKey) => filterRowsByQueueFilter({
+    assignmentFallbackEnabled,
+    assignments,
+    filter,
+    headers,
+    reviewer,
+    rows: allRows,
+  });
   const getQueueFilterCount = (filter: QueueFilterKey) =>
-    filterRowsByQueueFilter({
-      assignmentFallbackEnabled,
-      assignments,
-      filter,
-      headers,
-      legacyFirstChoiceFilter: null,
-      reviewer,
-      rows: allRows,
-      useLegacyFirstChoiceFilter: false,
-    }).length;
+    filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters).length;
+  const hasNoAssignments = activeQueueFilter === 'assignedToMe' && !getQueueRows('assignedToMe').length;
+  const filterTracks = SECTION_CONFIGS.flatMap(({ key, title }) =>
+    key === 'general' || key === 'other' ? [] : [{ key, label: title }],
+  );
 
   const sections = buildReviewSections({
     currentRow,
@@ -993,11 +949,11 @@ export default function GoogleSheetViewer() {
   const hasEmptyFilteredQueue =
     !hasReviewLoadError && !isReviewLoading && !filteredRows.length;
   const emptyQueueTitle =
-    activeQueueFilter === 'assignedToMe'
-      ? 'N/A'
+    hasNoAssignments
+      ? 'No assigned applications'
       : 'No matching applications';
   const emptyQueueDescription =
-    activeQueueFilter === 'assignedToMe'
+    hasNoAssignments
       ? 'There are no applications assigned to you right now.'
       : 'No applications match the current filter.';
 
@@ -1055,11 +1011,8 @@ export default function GoogleSheetViewer() {
         <main className="mx-auto min-h-[calc(100vh-5.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
           {!isReviewLoading ? (
             <section className="portal-surface-quiet px-6 py-4 sm:px-8">
-              <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
-                <p className="text-lg font-medium uppercase tracking-[0.24em] text-blue-500">
-                  Filters
-                </p>
-                <div className="flex flex-wrap gap-2 lg:justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
                   {QUEUE_FILTERS.map((filter) => {
                     const isActive = activeQueueFilter === filter.key;
                     const count = getQueueFilterCount(filter.key);
@@ -1068,6 +1021,7 @@ export default function GoogleSheetViewer() {
                       <Link
                         key={filter.key}
                         to={createQueueFilterHref(filter.key)}
+                        aria-current={isActive ? 'page' : undefined}
                         className={`portal-square-control border px-3 py-2 text-xs font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                           isActive
                             ? 'border-blue-300 bg-blue-50 text-blue-700'
@@ -1082,6 +1036,8 @@ export default function GoogleSheetViewer() {
                     );
                   })}
                 </div>
+                <ApplicationFiltersPopover applied={appliedFilters} questions={binaryQuestions} tracks={filterTracks}
+                  onApply={(filters) => setSearchParams(writeApplicationFilters(searchParams, filters))} />
               </div>
             </section>
           ) : null}
