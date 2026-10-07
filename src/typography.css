@@ -1,0 +1,125 @@
+/* Shared type roles. Page layouts own spacing and color. */
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+}
+
+:root {
+  --portal-text-xs: 0.75rem;
+  --portal-text-sm: 0.875rem;
+  --portal-text-base: 1rem;
+  --portal-text-lg: 1.125rem;
+  --portal-text-xl: 1.25rem;
+  --portal-title-size: clamp(2.25rem, 3.6vw, 3.125rem);
+  --portal-section-size: clamp(1.5rem, 2.2vw, 2rem);
+  --portal-display-size: clamp(2.5rem, 4.167vw, 3.75rem);
+  --portal-metric-size: clamp(2.5rem, 3.34vw, 3rem);
+  --portal-weight-regular: 400;
+  --portal-weight-semibold: 600;
+  --portal-weight-bold: 700;
+  --portal-leading-body: 1.5;
+  --portal-leading-title: 1.12;
+  --portal-tracking-title: -0.025em;
+  --portal-tracking-eyebrow: 0.12em;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--portal-text-base);
+  font-weight: var(--portal-weight-regular);
+  line-height: var(--portal-leading-body);
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+.portal-page-title {
+  font-size: var(--portal-title-size);
+  font-weight: var(--portal-weight-bold);
+  line-height: var(--portal-leading-title);
+  letter-spacing: var(--portal-tracking-title);
+  overflow-wrap: anywhere;
+}
+
+.portal-section-title {
+  font-size: var(--portal-section-size);
+  font-weight: var(--portal-weight-bold);
+  line-height: 1.25;
+  letter-spacing: var(--portal-tracking-title);
+}
+
+.portal-card-title {
+  font-size: 1.5rem;
+  font-weight: var(--portal-weight-bold);
+  line-height: 1.25;
+  letter-spacing: var(--portal-tracking-title);
+}
+
+.portal-subheading {
+  font-size: var(--portal-text-xl);
+  font-weight: var(--portal-weight-semibold);
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+
+.portal-eyebrow {
+  font-size: var(--portal-text-xs);
+  font-weight: var(--portal-weight-bold);
+  line-height: var(--portal-leading-body);
+  letter-spacing: var(--portal-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.portal-body, .portal-answer, .portal-question {
+  font-size: var(--portal-text-base);
+  font-weight: var(--portal-weight-regular);
+  line-height: var(--portal-leading-body);
+  letter-spacing: normal;
+}
+
+.portal-answer, .portal-question {
+  line-height: 1.625;
+  overflow-wrap: anywhere;
+}
+
+.portal-question {
+  font-weight: var(--portal-weight-semibold);
+}
+
+.portal-item-title {
+  font-size: var(--portal-text-base);
+  font-weight: var(--portal-weight-semibold);
+  line-height: var(--portal-leading-body);
+}
+
+.portal-meta, .portal-label, .portal-control {
+  font-size: var(--portal-text-sm);
+  font-weight: var(--portal-weight-regular);
+  line-height: var(--portal-leading-body);
+  letter-spacing: normal;
+}
+
+.portal-label, .portal-control {
+  font-weight: var(--portal-weight-semibold);
+}
+
+.portal-control--large {
+  font-size: var(--portal-text-base);
+}
+
+.portal-control--compact {
+  font-size: var(--portal-text-xs);
+}
+
+.portal-metric {
+  font-size: var(--portal-metric-size);
+  font-weight: var(--portal-weight-bold);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.portal-metric--compact {
+  font-size: var(--portal-section-size);
+}
