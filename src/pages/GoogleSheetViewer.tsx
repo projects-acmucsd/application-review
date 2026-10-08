@@ -3,12 +3,16 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ApplicationFiltersPopover } from '../components/ApplicationFiltersPopover';
 import {
+  filterRowsByApplicantSearch,
   filterRowsByApplicationFilters,
   getBinaryQuestions,
+  readApplicantSearch,
   readApplicationFilters,
   readQueueScope,
+  writeApplicantSearch,
   writeApplicationFilters,
 } from '../lib/applicationFilters';
+import { ApplicantSearchField } from '../components/ApplicantSearchField';
 import { InternalShell } from '../components/InternalShell';
 import { ReviewToolbar } from '../components/ReviewToolbar';
 import {
@@ -322,6 +326,15 @@ export default function GoogleSheetViewer() {
     [headers, allRows],
   );
   const appliedFilters = readApplicationFilters(searchParams);
+  const appliedSearch = readApplicantSearch(searchParams);
+  // The input is local so typing never waits on a URL round-trip, which would
+  // reset the caret mid-word. pushedSearch tracks what we last wrote so an
+  // external URL change (Back, Clear) can adopt without clobbering live typing.
+  const [searchInput, setSearchInput] = useState(appliedSearch);
+  const pushedSearch = useRef(appliedSearch);
+  // The queue with every filter except search applied, so a new term can be
+  // previewed without rebuilding the whole pipeline.
+  const rowsBeforeSearch = useRef<SheetRow[]>([]);
   const [editor, dispatchEditor] = useReducer(
     reviewEditorReducer,
     EMPTY_REVIEW_EDITOR,
@@ -512,7 +525,9 @@ export default function GoogleSheetViewer() {
       rows: allRows,
     });
 
-    const filtered = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
+    const matched = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
+    rowsBeforeSearch.current = matched;
+    const filtered = filterRowsByApplicantSearch(matched, headers, readApplicantSearch(searchParams));
     setFilteredRows(filtered);
 
     const selectionIndex = getReviewSelectionIndex({
@@ -943,8 +958,13 @@ export default function GoogleSheetViewer() {
     reviewer,
     rows: allRows,
   });
+  // The pills must count what the queue actually holds, search included.
   const getQueueFilterCount = (filter: QueueFilterKey) =>
-    filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters).length;
+    filterRowsByApplicantSearch(
+      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters),
+      headers,
+      appliedSearch,
+    ).length;
   const hasNoAssignments = activeQueueFilter === 'assignedToMe' && !getQueueRows('assignedToMe').length;
   const filterTracks = SECTION_CONFIGS.flatMap(({ key, title }) =>
     key === 'general' || key === 'other' ? [] : [{ key, label: title }],
@@ -974,18 +994,53 @@ export default function GoogleSheetViewer() {
     !hasReviewLoadError && !isReviewLoading && (!filteredRows.length || hasUnavailableApplication);
   const emptyQueueTitle = hasUnavailableApplication
     ? 'Application unavailable'
-    : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
+    : appliedSearch
+      ? 'No matching applicants'
+      : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
   const emptyQueueDescription = hasUnavailableApplication
     ? 'This application is not available in the current queue. Choose All applications to continue.'
-    : hasNoAssignments
-      ? 'There are no applications assigned to you right now.'
-      : 'No applications match the current filter.';
+    : appliedSearch
+      ? `No applicants match "${appliedSearch}" in this queue.`
+      : hasNoAssignments
+        ? 'There are no applications assigned to you right now.'
+        : 'No applications match the current filter.';
 
   useEffect(() => {
     if (!visibleAnswerSections.some((section) => section.key === selectedSectionKey)) {
       setSelectedSectionKey('general');
     }
   }, [selectedSectionKey, visibleAnswerSections]);
+
+  // Adopt a term changed outside the box, such as Back or a shared link.
+  useEffect(() => {
+    if (appliedSearch !== pushedSearch.current) {
+      pushedSearch.current = appliedSearch;
+      setSearchInput(appliedSearch);
+    }
+  }, [appliedSearch]);
+
+  // Debounced so a half-typed term never reaches the queue. An intermediate term
+  // that matches nobody would clear the selected applicant, and the editor only
+  // preserves a draft while the application id holds steady.
+  useEffect(() => {
+    if (searchInput.trim() === appliedSearch) return;
+
+    const timer = setTimeout(() => {
+      const nextRows = filterRowsByApplicantSearch(rowsBeforeSearch.current, headers, searchInput);
+      // Stay on the current applicant when they survive the new term.
+      const stickyIndex = applicationId
+        ? nextRows.findIndex((row) => getApplicationId(row) === applicationId)
+        : -1;
+      pushedSearch.current = searchInput.trim();
+      setSearchParams(
+        writeApplicantSearch(searchParams, searchInput, stickyIndex === -1 ? 1 : stickyIndex + 1),
+        // Replace, or every keystroke becomes its own history entry.
+        { replace: true },
+      );
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [appliedSearch, applicationId, headers, searchInput, searchParams, setSearchParams]);
 
   return (
     <>
@@ -1055,7 +1110,7 @@ export default function GoogleSheetViewer() {
           {!isReviewLoading ? (
             <section className="portal-surface-quiet px-6 py-4 sm:px-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {QUEUE_FILTERS.map((filter) => {
                     const isActive = activeQueueFilter === filter.key;
                     const count = getQueueFilterCount(filter.key);
@@ -1078,6 +1133,12 @@ export default function GoogleSheetViewer() {
                       </Link>
                     );
                   })}
+                  <ApplicantSearchField
+                    className="w-full sm:w-64"
+                    inputClassName="portal-body portal-muted-field portal-square-field h-10 border py-0 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                    value={searchInput}
+                    onChange={setSearchInput}
+                  />
                 </div>
                 <ApplicationFiltersPopover applied={appliedFilters} questions={binaryQuestions} tracks={filterTracks}
                   onApply={(filters) => setSearchParams(writeApplicationFilters(searchParams, filters))} />
@@ -1124,12 +1185,20 @@ export default function GoogleSheetViewer() {
                 <p className="portal-meta mx-auto mt-3 max-w-xl text-neutral-500">
                   {emptyQueueDescription}
                 </p>
-                {hasUnavailableApplication ? (
-                  <Link to={createQueueFilterHref('all')}
-                    className="portal-control portal-control--large portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
-                    All applications
-                  </Link>
-                ) : null}
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  {hasUnavailableApplication ? (
+                    <Link to={createQueueFilterHref('all')}
+                      className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+                      All applications
+                    </Link>
+                  ) : null}
+                  {appliedSearch ? (
+                    <button type="button" onClick={() => setSearchInput('')}
+                      className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center border border-blue-100 bg-white px-6 text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                      Clear search
+                    </button>
+                  ) : null}
+                </div>
               </section>
             ) : (
               <section className="portal-surface p-6 sm:p-8">
