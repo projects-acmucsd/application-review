@@ -172,17 +172,11 @@ export function ReviewPanelSkeleton() {
       aria-label="Loading reviewer comments"
       className="comments-section portal-surface-quiet p-6"
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-stretch">
+      <div className="grid gap-6">
         <section className="min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <SkeletonLine className="w-28" />
-              <SkeletonLine className="mt-3 !h-8 w-44" />
-            </div>
-            <div className="flex gap-2">
-              <SkeletonLine className="!h-10 w-20 !rounded-full" />
-              <SkeletonLine className="!h-10 w-20 !rounded-full" />
-            </div>
+          <div>
+            <SkeletonLine className="w-28" />
+            <SkeletonLine className="mt-3 !h-8 w-44" />
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {Array.from({ length: 10 }, (_, index) => (
@@ -194,12 +188,6 @@ export function ReviewPanelSkeleton() {
           </div>
           <SkeletonBlock className="mt-5 !h-56 !rounded-xl" />
         </section>
-
-        <div className="flex min-h-56 flex-col gap-3 pt-5 lg:h-full lg:pl-6 lg:pt-0">
-          <SkeletonLine className="mx-auto !h-7 w-24" />
-          <SkeletonBlock className="!h-20 !rounded-xl" />
-          <SkeletonBlock className="!h-20 !rounded-xl" />
-        </div>
       </div>
     </div>
   );

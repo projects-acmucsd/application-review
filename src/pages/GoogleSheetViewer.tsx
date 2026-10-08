@@ -10,6 +10,7 @@ import {
   writeApplicationFilters,
 } from '../lib/applicationFilters';
 import { InternalShell } from '../components/InternalShell';
+import { ReviewToolbar } from '../components/ReviewToolbar';
 import {
   ReviewAnswersSkeleton,
   ReviewPanelSkeleton,
@@ -890,6 +891,16 @@ export default function GoogleSheetViewer() {
     navigate('/');
   };
 
+  const resetEditor = () => {
+    dispatchEditor({
+      type: 'reset',
+      applicationId,
+      review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
+      legacyComment: getReviewerCommentValue(headers, currentRow),
+    });
+    setSaveError('');
+  };
+
   const activeQueueFilter = readQueueScope(searchParams);
   const selectionIndex = getReviewSelectionIndex({
     rows: filteredRows,
@@ -1019,8 +1030,27 @@ export default function GoogleSheetViewer() {
         onSignOut={() => void signOut()}
         reviewerName={reviewer ? `Signed in as ${reviewer.reviewerName}` : undefined}
         showAdmin={isAdmin}
+        toolbar={
+          !isReviewLoading && !hasReviewLoadError && !hasEmptyFilteredQueue ? (
+            <ReviewToolbar
+              currentPage={currentPage}
+              filteredCount={filteredRows.length}
+              hasNext={hasNext}
+              hasPrevious={hasPrevious}
+              isEditing={isEditing}
+              isReady={reviewsReady && editor.applicationId === applicationId}
+              isSaving={isSavingReview}
+              nextHref={hasNext ? createReviewHref(currentPage + 1) : undefined}
+              previousHref={
+                hasPrevious ? createReviewHref(currentPage - 1) : undefined
+              }
+              saveComment={saveComment}
+              onReset={resetEditor}
+            />
+          ) : undefined
+        }
       >
-        <main className="mx-auto min-h-[calc(100vh-5.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
+        <main className="mx-auto min-h-[calc(100vh-8.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
           {!isReviewLoading ? (
             <section className="portal-surface-quiet px-6 py-4 sm:px-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1222,7 +1252,7 @@ export default function GoogleSheetViewer() {
               ) : selectedAnswerSection ? (
                 <article
                   id={selectedAnswerSection.id}
-                  className="portal-surface-quiet scroll-mt-28 overflow-hidden px-6 py-7 sm:px-8"
+                  className="portal-surface-quiet scroll-mt-40 overflow-hidden px-6 py-7 sm:px-8"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
                     <div className="flex items-center gap-3">
@@ -1267,24 +1297,14 @@ export default function GoogleSheetViewer() {
                 </article>
               ) : null}
 
-              <div id="review-panel" className="scroll-mt-28">
+              <div id="review-panel" className="scroll-mt-40">
                 {isReviewLoading ? (
                   <ReviewPanelSkeleton />
                 ) : (
                   <ReviewPanel
                     commentText={commentText}
-                    currentPage={currentPage}
-                    filteredCount={filteredRows.length}
-                    hasNext={hasNext}
-                    hasPrevious={hasPrevious}
-                    isEditing={isEditing}
                     isSaving={isSavingReview}
                     isReady={reviewsReady && editor.applicationId === applicationId}
-                    nextHref={hasNext ? createReviewHref(currentPage + 1) : undefined}
-                    previousHref={
-                      hasPrevious ? createReviewHref(currentPage - 1) : undefined
-                    }
-                    saveComment={saveComment}
                     selectedDecision={draftDecision}
                     selectedRating={draftRating}
                     setCommentText={(value) => dispatchEditor({ type: 'comment', value })}
@@ -1298,15 +1318,6 @@ export default function GoogleSheetViewer() {
                       dispatchEditor({ type: 'rating', value: rating });
                     }}
                     onDraftChange={broadcastCommentDraft}
-                    onReset={() => {
-                      dispatchEditor({
-                        type: 'reset',
-                        applicationId,
-                        review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
-                        legacyComment: getReviewerCommentValue(headers, currentRow),
-                      });
-                      setSaveError('');
-                    }}
                   />
                 )}
               </div>
@@ -1321,18 +1332,10 @@ export default function GoogleSheetViewer() {
 
 interface ReviewPanelProps {
   commentText: string;
-  currentPage: number;
-  filteredCount: number;
-  hasNext: boolean;
-  hasPrevious: boolean;
-  isEditing: boolean;
   isSaving: boolean;
   isReady: boolean;
-  nextHref?: string;
   selectedDecision: ReviewDecision | null;
   selectedRating: number | null;
-  previousHref?: string;
-  saveComment: () => Promise<void>;
   setCommentText: (value: string) => void;
   onBeginEditing: () => void;
   setLastRemoteSave: (value: RemoteCommentUpdate | null) => void;
@@ -1340,21 +1343,12 @@ interface ReviewPanelProps {
   onDecisionChange: (decision: ReviewDecision) => void;
   onDraftChange: (value: string) => void;
   onRatingChange: (rating: number) => void;
-  onReset: () => void;
 }
 
 function ReviewPanel({
   commentText,
-  currentPage,
-  filteredCount,
-  hasNext,
-  hasPrevious,
-  isEditing,
   isSaving,
   isReady,
-  nextHref,
-  previousHref,
-  saveComment,
   selectedDecision,
   selectedRating,
   setCommentText,
@@ -1364,7 +1358,6 @@ function ReviewPanel({
   onDecisionChange,
   onDraftChange,
   onRatingChange,
-  onReset,
 }: ReviewPanelProps) {
   const decisionOptions: Array<{
     decision: ReviewDecision;
@@ -1398,7 +1391,7 @@ function ReviewPanel({
 
   return (
     <div className="comments-section portal-surface-quiet px-6 py-7 sm:px-8">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-stretch">
+      <div className="grid gap-8">
         <section className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1409,25 +1402,6 @@ function ReviewPanel({
                 Rating
               </h2>
             </div>
-            {isEditing ? (
-              <div className="flex gap-2">
-                <button
-                  disabled={isSaving}
-                  onClick={onReset}
-                  className="portal-control bg-neutral-100 px-4 py-2 text-neutral-600 transition-colors hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  aria-busy={isSaving}
-                  disabled={isSaving || !isReady}
-                  onClick={() => void saveComment()}
-                  className="portal-control min-w-20 bg-[#333] px-4 py-2 text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
-                >
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            ) : null}
           </div>
 
           {!isReady ? (
@@ -1517,40 +1491,6 @@ function ReviewPanel({
             placeholder="Enter review comments, notes, and decision context here..."
           />
         </section>
-
-        <div className="flex min-h-56 flex-col gap-3 border-t border-neutral-200/70 pt-6 lg:h-full lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-          <div className="text-center">
-            <p className="portal-subheading text-[#333]">
-              {filteredCount ? `${currentPage} of ${filteredCount}` : 'Loading queue'}
-            </p>
-          </div>
-          <div className="grid flex-1 gap-3">
-            {hasNext && nextHref && !isSaving ? (
-              <Link
-                to={nextHref}
-                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-blue-400 px-4 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-              >
-                Next
-              </Link>
-            ) : (
-              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-neutral-100 px-4 text-neutral-300">
-                Next
-              </span>
-            )}
-            {hasPrevious && previousHref && !isSaving ? (
-              <Link
-                to={previousHref}
-                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-blue-100 bg-white px-4 text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                Prev
-              </Link>
-            ) : (
-              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-neutral-100 bg-neutral-50 px-4 text-neutral-300">
-                Prev
-              </span>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
