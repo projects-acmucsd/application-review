@@ -436,6 +436,37 @@
   margin-bottom: 1.25rem;
 }
 
+/* The toolbar is space-between, so push the search to sit beside the copy action
+   rather than stranded against the heading. */
+.decisions-search {
+  margin-left: auto;
+  flex: 0 1 18rem;
+  min-width: 12rem;
+}
+
+.decisions-search-input {
+  height: 2.5rem;
+  border: 1px solid rgba(23, 23, 23, 0.12);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.78);
+  color: #333;
+  font-size: var(--portal-text-sm);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.decisions-search-input:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(219, 234, 254, 0.9);
+}
+
+@media (max-width: 540px) {
+  .decisions-search {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
 .decisions-email-copy {
   display: flex;
   align-items: flex-end;

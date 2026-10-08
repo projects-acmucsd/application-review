@@ -5,6 +5,7 @@ import {
   getPriorityColumnIndexes,
   type SheetRow,
 } from './googleSheetData';
+import { normalizeApplicantSearchText } from './applicationFilters';
 import type { ApplicationReview, ReviewDecision } from './reviewApi';
 
 export interface DecisionApplicant {
@@ -45,6 +46,21 @@ export function buildDecisionEmailList(applicants: readonly Pick<DecisionApplica
   }
 
   return { emails, text: emails.join(', '), missingEmailCount };
+}
+
+// Name and email are already resolved on DecisionApplicant, so this matches the
+// queue's semantics without touching the sheet again.
+export function filterDecisionApplicantsBySearch(
+  applicants: DecisionApplicant[],
+  term: string,
+): DecisionApplicant[] {
+  const search = normalizeApplicantSearchText(term);
+  if (!search) return applicants;
+  return applicants.filter(
+    (applicant) =>
+      normalizeApplicantSearchText(applicant.applicantName).includes(search) ||
+      normalizeApplicantSearchText(applicant.email ?? '').includes(search),
+  );
 }
 
 function compareApplicants(left: DecisionApplicant, right: DecisionApplicant): number {
