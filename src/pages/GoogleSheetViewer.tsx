@@ -31,6 +31,7 @@ import {
   signOutFromGoogle,
 } from '../lib/googleAuth';
 import {
+  getApplicantName,
   getFirstChoiceTrack,
   getApplicationId,
   getPriorityColumnIndexes,
@@ -908,7 +909,7 @@ export default function GoogleSheetViewer() {
     page: searchParams.get('q'),
   });
   const currentPage = selectionIndex + 1;
-  const applicantName = currentRow[2] || 'Loading applicant';
+  const applicantName = getApplicantName(headers, currentRow) || 'Loading applicant';
   const firstChoiceTrack = getFirstChoiceTrack(headers, currentRow);
   const firstChoice = firstChoiceTrack
     ? getSectionTitle(firstChoiceTrack)

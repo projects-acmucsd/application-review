@@ -1,7 +1,8 @@
 import {
+  getApplicantEmailColumn,
+  getApplicantName,
   getApplicationId,
   getPriorityColumnIndexes,
-  parseSheetSectionHeader,
   type SheetRow,
 } from './googleSheetData';
 import type { ApplicationReview, ReviewDecision } from './reviewApi';
@@ -21,24 +22,6 @@ export interface DecisionApplicant {
 export type DecisionGroups = Record<ReviewDecision, DecisionApplicant[]>;
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
-
-function getApplicantEmailColumn(headers: string[]): number {
-  const generalHeaders = headers.map((header) => {
-    const { sectionKey, question } = parseSheetSectionHeader(header);
-    return sectionKey && sectionKey !== 'general'
-      ? '' : question.toLowerCase().replace(/[^a-z0-9]/g, '');
-  });
-  const standardColumn = generalHeaders.findIndex((header) =>
-    header === 'email' || header === 'emailaddress',
-  );
-  if (standardColumn !== -1) return standardColumn;
-
-  const schoolColumn = generalHeaders.findIndex((header) =>
-    /^(?:ucsd|school|student)email(?:address)?$/.test(header),
-  );
-  // The original Google Form stores the applicant email in column B.
-  return schoolColumn === -1 ? 1 : schoolColumn;
-}
 
 export function buildDecisionEmailList(applicants: readonly Pick<DecisionApplicant, 'email'>[]): {
   emails: string[];
@@ -108,7 +91,7 @@ export function buildDecisionGroups({
       // A saved ID alone does not prove that the original application still exists.
       applicationIndex: row?.index ?? null,
       applicantName:
-        row?.data[2]?.trim() ||
+        (row ? getApplicantName(headers, row.data) : '') ||
         (row ? `Application ${row.index}` : `Application ${review.applicationId}`),
       email: row?.data[emailColumn]?.trim() || null,
       firstChoice: row?.data[firstChoiceColumn]?.trim() || 'Unspecified',
