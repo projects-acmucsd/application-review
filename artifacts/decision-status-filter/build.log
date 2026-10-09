@@ -10,14 +10,14 @@ dist/index.html                                 0.48 kB │ gzip:  0.31 kB
 dist/assets/acm-logo-BK4NGz2x.png             186.47 kB
 dist/assets/Home-C2lgtxMi.css                   5.33 kB │ gzip:  1.37 kB
 dist/assets/Decisions-DGIp_4kT.css              9.84 kB │ gzip:  2.30 kB
-dist/assets/index-CPkjdB2C.css                 41.86 kB │ gzip:  8.48 kB
+dist/assets/index-IGl3Q6Ex.css                 42.03 kB │ gzip:  8.52 kB
 dist/assets/reviewDefaults-BdnqasCR.js          0.15 kB │ gzip:  0.14 kB
-dist/assets/LoadingSkeletons-CsJ9XZSr.js        6.90 kB │ gzip:  1.55 kB
-dist/assets/ApplicantSearchField-Bhgj27rR.js    7.04 kB │ gzip:  2.87 kB
-dist/assets/Home-Ca8KpSHw.js                    7.56 kB │ gzip:  3.00 kB
-dist/assets/Decisions-Vx2ay21K.js              17.19 kB │ gzip:  5.56 kB
-dist/assets/Admin-Be8fbfTH.js                  19.09 kB │ gzip:  5.43 kB
-dist/assets/GoogleSheetViewer-ZsX6ZqXa.js      34.62 kB │ gzip: 10.34 kB
-dist/assets/InternalShell-CB3MCPY6.js         214.97 kB │ gzip: 57.50 kB
-dist/assets/index-PPbPxyNo.js                 227.96 kB │ gzip: 73.42 kB
-✓ built in 845ms
+dist/assets/LoadingSkeletons-DPkitMsQ.js        6.90 kB │ gzip:  1.55 kB
+dist/assets/ApplicantSearchField-rsYLwc8H.js    7.04 kB │ gzip:  2.87 kB
+dist/assets/Home-BNgtrVGP.js                    7.56 kB │ gzip:  3.00 kB
+dist/assets/Decisions-CdMYJPgc.js              17.19 kB │ gzip:  5.56 kB
+dist/assets/Admin-NxQ-b1pc.js                  19.09 kB │ gzip:  5.43 kB
+dist/assets/GoogleSheetViewer-DeMGqeaW.js      35.04 kB │ gzip: 10.46 kB
+dist/assets/InternalShell-tmrCxvON.js         214.97 kB │ gzip: 57.50 kB
+dist/assets/index-CvPNaUvR.js                 227.96 kB │ gzip: 73.42 kB
+✓ built in 838ms

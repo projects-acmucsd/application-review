@@ -10,7 +10,8 @@
     ],
     "selection": "One status; click selected status again to clear. Apply commits; Reset clears filters.",
     "source": "Existing saved review decisions",
-    "none": "Absent review or null decision; comments and ratings alone do not count as decisions"
+    "none": "Absent review or null decision; comments and ratings alone do not count as decisions",
+    "draftPreservation": "Background refreshes retain the active queue and draft while editing. Save, Cancel, and explicit navigation release the queue snapshot; Retry is available without leaving the draft."
   },
   "browser": {
     "fixture": "Development Sheet applicants and intercepted API responses; no production writes",
@@ -67,5 +68,32 @@
     "desktop-none-selected.png",
     "mobile-none-selected.png",
     "empty-results.png"
-  ]
+  ],
+  "draftRegression": {
+    "passed": 20,
+    "checks": [
+      "Failed polling preserves comment",
+      "Failed polling preserves rating",
+      "Failed polling preserves decision",
+      "Failed polling retains displayed queue count",
+      "Failed polling disables Save",
+      "Retry preserves comment",
+      "Retry preserves rating",
+      "Retry preserves decision",
+      "Retry retains displayed queue count",
+      "Save persists the preserved decision and releases queue",
+      "Remote decision preserves comment",
+      "Remote decision preserves rating",
+      "Remote decision preserves decision",
+      "Remote decision retains displayed queue count",
+      "Cancel releases queue to latest decisions",
+      "Remote decision before navigation preserves comment",
+      "Remote decision before navigation preserves rating",
+      "Remote decision before navigation preserves decision",
+      "Remote decision before navigation retains displayed queue count",
+      "Explicit navigation releases draft and queue"
+    ]
+  },
+  "browserChecksTotal": 51,
+  "draftRegressionSource": "draft-regression.browser.js"
 }

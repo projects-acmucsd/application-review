@@ -313,7 +313,12 @@ export default function GoogleSheetViewer() {
   const [assignments, setAssignments] = useState<ApplicationAssignment[]>([]);
   const [assignmentFallbackEnabled, setAssignmentFallbackEnabled] =
     useState(false);
-  const [filteredRows, setFilteredRows] = useState<SheetRow[]>([]);
+  // Keep the displayed queue and its decision counts together while a draft is active.
+  const [queueSnapshot, setQueueSnapshot] = useState<{
+    rows: SheetRow[];
+    reviews: Record<string, ApplicationReview> | null;
+  }>({ rows: [], reviews: null });
+  const filteredRows = queueSnapshot.rows;
   const [currentRow, setCurrentRow] = useState<string[]>([]);
   const [reviewer, setReviewer] = useState<ReviewerIdentity | null>(() => {
     const storedProfile = getStoredGoogleProfile();
@@ -321,6 +326,7 @@ export default function GoogleSheetViewer() {
   });
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const previousSelectionParams = useRef(searchParams.toString());
   const binaryQuestions = useMemo(
     () => getBinaryQuestions(headers, allRows),
     [headers, allRows],
@@ -514,6 +520,9 @@ export default function GoogleSheetViewer() {
   }, [fetchApplicationReviews, fetchAssignments, fetchSheetData, navigate]);
 
   useEffect(() => {
+    const selectionParams = searchParams.toString();
+    const isExplicitNavigation = previousSelectionParams.current !== selectionParams;
+    previousSelectionParams.current = selectionParams;
     const activeFilter = readQueueScope(searchParams);
 
     const scopedRows = filterRowsByQueueFilter({
@@ -528,7 +537,10 @@ export default function GoogleSheetViewer() {
     const matched = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams), reviewsReady ? reviewsByApplicationId : null);
     rowsBeforeSearch.current = matched;
     const filtered = filterRowsByApplicantSearch(matched, headers, readApplicantSearch(searchParams));
-    setFilteredRows(filtered);
+    // A refresh must not navigate away from an unsaved review. Save/Cancel releases
+    // the snapshot; a URL change is an explicit request to select another queue/page.
+    if (isEditing && !isExplicitNavigation) return;
+    setQueueSnapshot({ rows: filtered, reviews: reviewsReady ? reviewsByApplicationId : null });
 
     const selectionIndex = getReviewSelectionIndex({
       rows: filtered,
@@ -557,6 +569,7 @@ export default function GoogleSheetViewer() {
     assignmentFallbackEnabled,
     assignments,
     headers,
+    isEditing,
     reviewer,
     reviewsByApplicationId,
     reviewsReady,
@@ -963,7 +976,7 @@ export default function GoogleSheetViewer() {
   // The pills must count what the queue actually holds, search included.
   const getQueueFilterCount = (filter: QueueFilterKey) =>
     filterRowsByApplicantSearch(
-      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters, reviewsReady ? reviewsByApplicationId : null),
+      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters, queueSnapshot.reviews),
       headers,
       appliedSearch,
     ).length;
@@ -1155,9 +1168,15 @@ export default function GoogleSheetViewer() {
           ) : null}
 
           {reviewDataWarning && !hasReviewLoadError ? (
-            <p className="portal-meta portal-square-field mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-              {reviewDataWarning}
-            </p>
+            <div className="portal-meta portal-square-field mt-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+              <p>{reviewDataWarning}</p>
+              {reviewsWarning && currentRow.length > 0 ? (
+                <button type="button" onClick={() => void fetchApplicationReviews()}
+                  className="portal-control portal-square-control mt-3 border border-amber-300 bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                  Retry
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <div className={isReviewLoading ? '' : 'mt-7'}>
