@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDownIcon, Cross2Icon, PlusIcon } from '@radix-ui/react-icons';
-import type { ApplicationFilters, BinaryAnswer, BinaryQuestion } from '../lib/applicationFilters';
+import type { ApplicationFilters, BinaryAnswer, BinaryQuestion, DecisionStatus } from '../lib/applicationFilters';
 import type { TrackKey } from '../lib/googleSheetData';
 
 interface Props {
@@ -15,13 +15,14 @@ const control = 'portal-square-control focus-visible:outline-none focus-visible:
 export function ApplicationFiltersPopover({ applied, questions, tracks, onApply }: Props) {
   const [open, setOpen] = useState(false);
   const [firstChoice, setFirstChoice] = useState<TrackKey | null>(null);
+  const [decisionStatus, setDecisionStatus] = useState<DecisionStatus | null>(null);
   const [draftQuestions, setDraftQuestions] = useState<DraftQuestion[]>([]);
   const [panelHeight, setPanelHeight] = useState<number>();
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const filterCount = (applied.firstChoice ? 1 : 0) + applied.questions.length;
+  const filterCount = (applied.decisionStatus ? 1 : 0) + (applied.firstChoice ? 1 : 0) + applied.questions.length;
 
   const close = (restoreFocus = true) => {
     setOpen(false);
@@ -34,7 +35,7 @@ export function ApplicationFiltersPopover({ applied, questions, tracks, onApply 
     // The header and toolbar wrap on phones; keep the actions within the viewport.
     const fitPanel = () => {
       const top = panel.current?.getBoundingClientRect().top;
-      if (top !== undefined) setPanelHeight(Math.min(576, Math.max(160, window.innerHeight - top - 16)));
+      if (top !== undefined) setPanelHeight(Math.min(704, Math.max(160, window.innerHeight - top - 16)));
     };
     fitPanel();
     window.addEventListener('resize', fitPanel);
@@ -66,6 +67,7 @@ export function ApplicationFiltersPopover({ applied, questions, tracks, onApply 
   const toggle = () => {
     if (open) { close(); return; }
     setFirstChoice(applied.firstChoice);
+    setDecisionStatus(applied.decisionStatus);
     setDraftQuestions(applied.questions.length ? applied.questions.map((item) => ({ ...item })) :
       questions.length ? [{ question: questions[0].header, answer: 'any' }] : []);
     setOpen(true);
@@ -86,7 +88,7 @@ export function ApplicationFiltersPopover({ applied, questions, tracks, onApply 
       {open ? (
         <section ref={panel} id="application-filters" role="dialog" aria-labelledby="application-filters-heading"
           style={{ maxHeight: panelHeight }}
-          className="absolute right-0 top-full z-30 mt-2 flex max-h-[min(36rem,calc(100dvh-10rem))] w-[min(27rem,calc(100vw-5.5rem))] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white p-5 shadow-lg shadow-neutral-900/10 sm:p-6">
+          className="absolute right-0 top-full z-30 mt-2 flex max-h-[min(44rem,calc(100dvh-10rem))] w-[min(27rem,calc(100vw-5.5rem))] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white p-5 shadow-lg shadow-neutral-900/10 sm:p-6">
           <div className="mb-6 flex shrink-0 items-center justify-between">
             <h2 ref={heading} tabIndex={-1} id="application-filters-heading" className="text-xl font-bold text-[#333] outline-none">Filters</h2>
             <button type="button" aria-label="Close filters" onClick={() => close()} className={`${control} flex h-8 w-8 items-center justify-center text-neutral-500 hover:bg-neutral-50`}>
@@ -94,6 +96,24 @@ export function ApplicationFiltersPopover({ applied, questions, tracks, onApply 
             </button>
           </div>
           <div className="min-h-0 overflow-y-auto">
+            <fieldset className="min-w-0">
+              <legend className="mb-3 text-sm font-bold text-[#333]">Decision status</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['accept', 'Accepted'],
+                  ['waitlist', 'Waitlist'],
+                  ['reject', 'Rejected'],
+                  ['none', 'None'],
+                ] as const).map(([status, label]) => (
+                  <button key={status} type="button" aria-pressed={decisionStatus === status}
+                    onClick={() => setDecisionStatus(decisionStatus === status ? null : status)}
+                    className={`${control} min-h-11 border px-3 py-2 text-sm font-semibold ${decisionStatus === status ? 'border-blue-500 bg-blue-500 text-white' : 'border-neutral-200 bg-white text-[#333] hover:bg-blue-50'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="my-5 border-t border-neutral-200" />
             <fieldset className="min-w-0">
               <legend className="mb-3 text-sm font-bold text-[#333]">First choice</legend>
               <div className="grid grid-cols-2 gap-2">
@@ -145,10 +165,11 @@ export function ApplicationFiltersPopover({ applied, questions, tracks, onApply 
           <div className="mt-6 flex shrink-0 items-center justify-between">
             <button type="button" onClick={() => {
               setFirstChoice(null);
+              setDecisionStatus(null);
               setDraftQuestions(questions.length ? [{ question: questions[0].header, answer: 'any' }] : []);
             }} className={`${control} min-h-10 px-1 text-sm font-semibold text-neutral-500 underline underline-offset-2`}>Reset</button>
             <button type="button" onClick={() => {
-              onApply({ firstChoice, questions: draftQuestions.flatMap(({ question, answer }) => answer === 'any' ? [] : [{ question, answer }]) });
+              onApply({ decisionStatus, firstChoice, questions: draftQuestions.flatMap(({ question, answer }) => answer === 'any' ? [] : [{ question, answer }]) });
               close();
             }} className={`${control} min-h-11 bg-blue-500 px-6 text-sm font-bold text-white hover:bg-blue-600`}>Apply</button>
           </div>

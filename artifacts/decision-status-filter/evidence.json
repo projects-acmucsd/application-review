@@ -1,0 +1,99 @@
+{
+  "feature": "Applicants decision status filter",
+  "date": "2026-10-08",
+  "implementation": {
+    "statuses": [
+      "Accepted",
+      "Waitlist",
+      "Rejected",
+      "None"
+    ],
+    "selection": "One status; click selected status again to clear. Apply commits; Reset clears filters.",
+    "source": "Existing saved review decisions",
+    "none": "Absent review or null decision; comments and ratings alone do not count as decisions",
+    "draftPreservation": "Background refreshes retain the active queue and draft while editing. Save, Cancel, and explicit navigation release the queue snapshot; Retry is available without leaving the draft."
+  },
+  "browser": {
+    "fixture": "Development Sheet applicants and intercepted API responses; no production writes",
+    "checks": [
+      "Accepted shows selected state",
+      "Accepted applies to URL",
+      "Accepted filters queue and count",
+      "Accepted survives reload",
+      "Accepted clears on second click",
+      "Waitlist shows selected state",
+      "Waitlist applies to URL",
+      "Waitlist filters queue and count",
+      "Waitlist survives reload",
+      "Waitlist clears on second click",
+      "Rejected shows selected state",
+      "Rejected applies to URL",
+      "Rejected filters queue and count",
+      "Rejected survives reload",
+      "Rejected clears on second click",
+      "None selects applicant without a saved review",
+      "Removed helper text stays absent",
+      "None combines with first choice and question answer; badge counts three filters",
+      "Search preserves decision filter",
+      "Reset clears draft selection",
+      "Reset clears decision while preserving search",
+      "Decision filter intersects Assigned scope",
+      "Impossible combined filters show the empty state",
+      "Saving a decision removes that applicant from the None queue",
+      "Failed reviews do not misclassify applicants as None",
+      "Retry restores status filtering",
+      "Mobile panel stays inside viewport",
+      "Mobile Apply stays visible",
+      "Mobile page has no horizontal overflow",
+      "Escape closes filters",
+      "Escape restores trigger focus"
+    ],
+    "passed": 31
+  },
+  "unitTests": {
+    "passed": 42,
+    "failed": 0,
+    "log": "unit-tests.tap"
+  },
+  "build": {
+    "result": "passed",
+    "log": "build.log"
+  },
+  "lint": {
+    "result": "passed",
+    "log": "lint.log"
+  },
+  "scope": "Local implementation verified with development Sheet data and intercepted API fixtures; no live database writes or deployment performed.",
+  "screenshots": [
+    "desktop-none-selected.png",
+    "mobile-none-selected.png",
+    "empty-results.png"
+  ],
+  "draftRegression": {
+    "passed": 20,
+    "checks": [
+      "Failed polling preserves comment",
+      "Failed polling preserves rating",
+      "Failed polling preserves decision",
+      "Failed polling retains displayed queue count",
+      "Failed polling disables Save",
+      "Retry preserves comment",
+      "Retry preserves rating",
+      "Retry preserves decision",
+      "Retry retains displayed queue count",
+      "Save persists the preserved decision and releases queue",
+      "Remote decision preserves comment",
+      "Remote decision preserves rating",
+      "Remote decision preserves decision",
+      "Remote decision retains displayed queue count",
+      "Cancel releases queue to latest decisions",
+      "Remote decision before navigation preserves comment",
+      "Remote decision before navigation preserves rating",
+      "Remote decision before navigation preserves decision",
+      "Remote decision before navigation retains displayed queue count",
+      "Explicit navigation releases draft and queue"
+    ]
+  },
+  "browserChecksTotal": 51,
+  "draftRegressionSource": "draft-regression.browser.js"
+}
