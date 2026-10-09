@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildDecisionEmailList, buildDecisionGroups, filterDecisionApplicantsBySearch } from '../src/lib/decisionApplicants.ts';
+import { buildDecisionEmailGroups, buildDecisionEmailList, buildDecisionGroups, filterDecisionApplicantsBySearch } from '../src/lib/decisionApplicants.ts';
 import type { SheetRow } from '../src/lib/googleSheetData.ts';
 import type { ApplicationReview } from '../src/lib/reviewApi.ts';
 
@@ -214,6 +214,52 @@ test('deduplicates emails ignoring case and skips blank or malformed addresses',
   assert.deepEqual(recipients.emails, ['Alex+projects@example.test', 'maya@example.test']);
   assert.equal(recipients.text, 'Alex+projects@example.test, maya@example.test');
   assert.equal(recipients.missingEmailCount, 5);
+});
+
+test('copies first-choice groups within each decision, independently of the table search', () => {
+  const applicants = [
+    row(2, 'Alex', 'AI'), row(3, 'Maya', 'Design'), row(4, 'Jordan', 'Robotics'),
+    row(5, 'Sam', ' ai '), row(6, 'Taylor', 'Hack'), row(7, 'Casey', 'Robotics'),
+    row(8, 'Waitlisted AI', 'AI'), row(9, 'Rejected AI', 'AI'),
+  ];
+  applicants.forEach((applicant, index) => { applicant.data[1] = `applicant${index}@example.test`; });
+  const groups = buildDecisionGroups({
+    reviews: applicants.map((applicant, index) => review(
+      `sheet-row:${applicant.index}`, index === 6 ? 'waitlist' : index === 7 ? 'reject' : 'accept', 9,
+    )),
+    rows: applicants,
+    headers: [],
+  });
+  const copies = buildDecisionEmailGroups(groups.accept);
+  assert.equal(filterDecisionApplicantsBySearch(groups.accept, 'Alex').length, 1);
+  assert.deepEqual(copies.map(({ key, label, emails }) => [key, label, emails.length]), [
+    ['all', 'All Applicants', 6], ['ai', 'AI', 2], ['design', 'Design', 1],
+    ['hack', 'Hack', 1], ['robotics', 'Robotics', 2],
+  ]);
+  assert.equal(copies[1].text, 'applicant0@example.test, applicant3@example.test');
+  assert.equal(buildDecisionEmailGroups(groups.waitlist)[1].text, 'applicant6@example.test');
+  assert.equal(buildDecisionEmailGroups(groups.reject)[1].text, 'applicant7@example.test');
+});
+
+test('copy group counts use unique valid emails and keep unknown first choices in All Applicants', () => {
+  const copies = buildDecisionEmailGroups([
+    { firstChoice: 'AI', email: ' alex@example.test ' },
+    { firstChoice: 'ai', email: 'ALEX@example.test' },
+    { firstChoice: 'Robotics', email: 'alex@example.test' },
+    { firstChoice: 'AI', email: 'invalid' },
+    { firstChoice: 'Hack', email: null },
+    { firstChoice: 'Unspecified', email: 'casey@example.test' },
+    { firstChoice: 'Unknown project', email: 'sam@example.test' },
+  ]);
+  assert.equal(copies[0].text, 'alex@example.test, casey@example.test, sam@example.test');
+  assert.equal(copies[0].missingEmailCount, 2);
+  assert.equal(copies[1].text, 'alex@example.test');
+  assert.equal(copies[1].missingEmailCount, 1);
+  assert.equal(copies[2].emails.length, 0);
+  assert.equal(copies[3].emails.length, 0);
+  assert.equal(copies[3].missingEmailCount, 1);
+  assert.equal(copies[4].text, 'alex@example.test');
+  assert.ok(buildDecisionEmailGroups([]).every((group) => group.text === '' && !group.emails.length));
 });
 
 test('does not substitute another column when the detected email cell is empty', () => {

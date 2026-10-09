@@ -481,23 +481,99 @@
   justify-content: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  border: 1px solid #cbd1da;
-  border-radius: 0.25rem;
+  border: 1px solid var(--portal-charcoal);
+  border-radius: 0.5rem;
   padding: 0.625rem 1rem;
-  background: #fff;
-  color: var(--portal-charcoal);
+  background: var(--portal-charcoal);
+  color: #fff;
   cursor: pointer;
 }
 
 .decisions-copy-emails:hover:not(:disabled) {
-  border-color: var(--portal-link-blue);
-  background: #f6faff;
+  background: #44464d;
 }
 
 .decisions-copy-emails:disabled {
   cursor: not-allowed;
-  color: var(--portal-muted);
   opacity: 0.6;
+}
+
+.decisions-copy-anchor {
+  position: relative;
+}
+
+.decisions-copy-menu {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  z-index: 30;
+  width: min(17.5rem, calc(100vw - 2.5rem));
+  max-height: min(26rem, 65dvh);
+  overflow-y: auto;
+  border: 1px solid #dce1e9;
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: 0 6px 16px rgb(23 23 23 / 12%);
+}
+
+.decisions-copy-menu-heading,
+.decisions-copy-menu-footer {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  color: var(--portal-muted);
+  font-size: var(--portal-text-sm);
+  line-height: 1.5;
+}
+
+.decisions-copy-menu-heading {
+  font-weight: 600;
+}
+
+.decisions-copy-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  border: 0;
+  background: #fff;
+  color: var(--portal-charcoal);
+  font: inherit;
+  font-size: var(--portal-text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.decisions-copy-menu-item:first-of-type {
+  border-bottom: 1px solid #e3e7ed;
+  margin-bottom: 0.25rem;
+}
+
+.decisions-copy-menu-item:hover:not(:disabled),
+.decisions-copy-menu-item:focus-visible {
+  background: #e8f2ff;
+}
+
+.decisions-copy-menu-item:focus-visible {
+  outline: 2px solid var(--portal-link-blue);
+  outline-offset: -2px;
+}
+
+.decisions-copy-menu-item:disabled {
+  color: var(--portal-muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.decisions-copy-menu-count {
+  color: var(--portal-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.decisions-copy-menu-footer {
+  border-top: 1px solid #e3e7ed;
 }
 
 .decisions-copy-emails svg {
@@ -535,5 +611,9 @@
   }
   .decisions-copy-feedback {
     text-align: left;
+  }
+  .decisions-copy-menu {
+    right: auto;
+    left: 0;
   }
 }

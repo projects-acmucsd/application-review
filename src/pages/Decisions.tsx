@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeftIcon, ArrowRightIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, ClockIcon, XCircleIcon } from '@heroicons/react/20/solid';
 
 import { InternalShell } from '../components/InternalShell';
 import { clearCachedAdminAccess, getAdminStatus } from '../lib/adminApi';
-import { buildDecisionEmailList, buildDecisionGroups, filterDecisionApplicantsBySearch, type DecisionApplicant } from '../lib/decisionApplicants';
+import { buildDecisionEmailGroups, buildDecisionGroups, filterDecisionApplicantsBySearch, type DecisionApplicant, type DecisionEmailGroup } from '../lib/decisionApplicants';
 import { readApplicantSearch, writeApplicantSearch } from '../lib/applicationFilters';
 import { ApplicantSearchField } from '../components/ApplicantSearchField';
 import {
@@ -82,48 +82,135 @@ function AdminEmailCopy({ applicants, decisionLabel }: {
   applicants: DecisionApplicant[];
   decisionLabel: string;
 }) {
-  const { emails, text, missingEmailCount } = useMemo(
-    () => buildDecisionEmailList(applicants), [applicants],
+  const groups = useMemo(
+    () => buildDecisionEmailGroups(applicants), [applicants],
   );
-  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
+  const [open, setOpen] = useState(false);
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number>();
+  const [result, setResult] = useState<{
+    status: 'copying' | 'copied' | 'error';
+    group: DecisionEmailGroup;
+  } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const openAtEnd = useRef(false);
+  const menuId = useId();
   const category = decisionLabel.toLowerCase();
+  const copying = result?.status === 'copying';
+  const { missingEmailCount } = result?.group ?? groups[0];
   const missingMessage = missingEmailCount > 0
     ? `${missingEmailCount} applicant${missingEmailCount === 1 ? ' has' : 's have'} no valid email.`
     : '';
 
-  async function copyEmails() {
-    if (!emails.length || copyState === 'copying') return;
-    setCopyState('copying');
+  useLayoutEffect(() => {
+    if (!open) return;
+    const fitMenu = () => {
+      const top = menu.current?.getBoundingClientRect().top;
+      if (top !== undefined) setMenuMaxHeight(Math.min(416, Math.max(88, window.innerHeight - top - 16)));
+    };
+    fitMenu();
+    const items = menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+    (openAtEnd.current ? items?.[items.length - 1] : items?.[0])?.focus();
+    const dismissOutside = (event: PointerEvent) => {
+      if (root.current && !event.composedPath().includes(root.current)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    window.addEventListener('resize', fitMenu);
+    window.addEventListener('scroll', fitMenu, true);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      window.removeEventListener('resize', fitMenu);
+      window.removeEventListener('scroll', fitMenu, true);
+    };
+  }, [open]);
+
+  function closeMenu() {
+    setOpen(false);
+    trigger.current?.focus();
+  }
+
+  function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenu();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const items = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+      : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+  }
+
+  async function copyEmails(group: DecisionEmailGroup) {
+    if (!group.emails.length || copying) return;
+    closeMenu();
+    setResult({ status: 'copying', group });
     try {
-      await navigator.clipboard.writeText(text);
-      setCopyState('copied');
+      await navigator.clipboard.writeText(group.text);
+      setResult({ status: 'copied', group });
     } catch {
-      setCopyState('error');
+      setResult({ status: 'error', group });
     }
   }
 
   return (
-    <div className="decisions-email-copy">
-      <button type="button" className="decisions-copy-emails portal-control"
-        aria-label={`Copy ${category} applicant emails`}
-        aria-busy={copyState === 'copying'}
-        disabled={!emails.length || copyState === 'copying'}
-        title={emails.length ? 'Copy comma-separated emails for Gmail Bcc' : 'No valid applicant emails to copy'}
-        onClick={() => void copyEmails()}>
-        {copyState === 'copied' ? <CheckCircleIcon aria-hidden="true" /> : <ClipboardDocumentIcon aria-hidden="true" />}
-        {copyState === 'copying' ? 'Copying…' : copyState === 'copied' ? 'Copied' : 'Copy emails'}
-      </button>
-      {copyState === 'copied' || missingMessage ? (
+    <div ref={root} className="decisions-email-copy" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
+      <div className="decisions-copy-anchor">
+        <button ref={trigger} type="button" className="decisions-copy-emails portal-control"
+          aria-label={`Copy ${category} applicant emails`}
+          aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
+          aria-busy={copying} disabled={!groups[0].emails.length || copying}
+          title={groups[0].emails.length ? 'Choose applicant emails to copy for Gmail Bcc' : 'No valid applicant emails to copy'}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              openAtEnd.current = event.key === 'ArrowUp';
+              setOpen(true);
+            }
+          }}
+          onClick={() => {
+            openAtEnd.current = false;
+            setOpen((value) => !value);
+          }}>
+          {result?.status === 'copied' ? <CheckCircleIcon aria-hidden="true" /> : <ClipboardDocumentIcon aria-hidden="true" />}
+          {copying ? 'Copying…' : 'Copy emails'}
+          <ChevronDownIcon aria-hidden="true" />
+        </button>
+        {open ? (
+          <div ref={menu} id={menuId} role="menu" aria-labelledby={`${menuId}-heading`}
+            className="decisions-copy-menu" style={{ maxHeight: menuMaxHeight }} onKeyDown={onMenuKeyDown}>
+            <p id={`${menuId}-heading`} className="decisions-copy-menu-heading">Copy {category} emails</p>
+            {groups.map((group) => (
+              <button key={group.key} type="button" role="menuitem" tabIndex={-1}
+                className="decisions-copy-menu-item" disabled={!group.emails.length}
+                aria-label={`${group.label}: copy ${group.emails.length} ${category} email${group.emails.length === 1 ? '' : 's'}`}
+                onClick={() => void copyEmails(group)}>
+                <span>{group.label}</span><span className="decisions-copy-menu-count">{group.emails.length}</span>
+              </button>
+            ))}
+            <p className="decisions-copy-menu-footer">Choose a group to copy</p>
+          </div>
+        ) : null}
+      </div>
+      {!open && (result?.status === 'copied' || missingMessage) ? (
         <p className="decisions-copy-feedback portal-meta" role="status">
-          {copyState === 'copied' ? `Copied ${emails.length} ${category} email${emails.length === 1 ? '' : 's'}. ` : ''}
+          {result?.status === 'copied'
+            ? `Copied ${result.group.emails.length} ${category}${result.group.key === 'all' ? '' : ` ${result.group.label}`} email${result.group.emails.length === 1 ? '' : 's'}. ` : ''}
           {missingMessage}
         </p>
       ) : null}
-      {copyState === 'error' ? (
+      {!open && result?.status === 'error' ? (
         <div className="decisions-copy-fallback">
-          <p className="portal-meta" role="alert">Clipboard access failed. Select and copy the emails below.</p>
-          <textarea className="portal-body" aria-label={`${decisionLabel} applicant email list`}
-            readOnly value={text} onFocus={(event) => event.currentTarget.select()} />
+          <p className="portal-meta" role="alert">Clipboard access failed. Select and copy the {category}{result.group.key === 'all' ? '' : ` ${result.group.label}`} emails below.</p>
+          <textarea className="portal-body" aria-label={`${decisionLabel} ${result.group.label} email list`}
+            readOnly value={result.group.text} onFocus={(event) => event.currentTarget.select()} />
         </div>
       ) : null}
     </div>
@@ -291,8 +378,7 @@ export default function Decisions() {
                 </div>
                 <ApplicantSearchField className="decisions-search" inputClassName="decisions-search-input"
                   value={searchInput} onChange={setSearchInput} />
-                {/* Copies the whole decision bucket, never the searched subset: a filter box
-                    must not silently shrink a mail list from 37 recipients to 2. */}
+                {/* Copy groups use the whole decision bucket, independently of name search. */}
                 {isAdmin ? <AdminEmailCopy key={selectedDecision} applicants={groups[selectedDecision]} decisionLabel={selectedLabel} /> : null}
               </div>
               {applicants.length ? (

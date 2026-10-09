@@ -3,7 +3,9 @@ import {
   getApplicantName,
   getApplicationId,
   getPriorityColumnIndexes,
+  normalizeSheetTrackName,
   type SheetRow,
+  type TrackKey,
 } from './googleSheetData';
 import { normalizeApplicantSearchText } from './applicationFilters';
 import type { ApplicationReview, ReviewDecision } from './reviewApi';
@@ -46,6 +48,35 @@ export function buildDecisionEmailList(applicants: readonly Pick<DecisionApplica
   }
 
   return { emails, text: emails.join(', '), missingEmailCount };
+}
+
+export interface DecisionEmailGroup {
+  key: 'all' | TrackKey;
+  label: string;
+  emails: string[];
+  text: string;
+  missingEmailCount: number;
+}
+
+export function buildDecisionEmailGroups(
+  applicants: readonly Pick<DecisionApplicant, 'email' | 'firstChoice'>[],
+): DecisionEmailGroup[] {
+  const choices = [
+    { key: 'ai', label: 'AI' },
+    { key: 'design', label: 'Design' },
+    { key: 'hack', label: 'Hack' },
+    { key: 'robotics', label: 'Robotics' },
+  ] as const;
+
+  return [
+    { key: 'all', label: 'All Applicants', ...buildDecisionEmailList(applicants) },
+    ...choices.map((choice) => ({
+      ...choice,
+      ...buildDecisionEmailList(applicants.filter(
+        (applicant) => normalizeSheetTrackName(applicant.firstChoice) === choice.key,
+      )),
+    })),
+  ];
 }
 
 // Name and email are already resolved on DecisionApplicant, so this matches the
