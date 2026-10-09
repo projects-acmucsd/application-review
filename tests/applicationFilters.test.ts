@@ -30,13 +30,13 @@ test('detects exact binary answers, skips blanks, metadata, mixed answers and du
 
 test('combines first choice with all question conditions and never matches blank answers', () => {
   const questions = [{ question: headers[2], answer: 'yes' as const }, { question: headers[3], answer: 'no' as const }];
-  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { firstChoice: 'ai', questions }).map(({ index }) => index), [1, 4]);
-  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { firstChoice: null, questions: [{ question: headers[2], answer: 'no' }] }).map(({ index }) => index), [2]);
-  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { firstChoice: 'ai', questions: [] }).map(({ index }) => index), [1, 3, 4]);
+  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { decisionStatus: null, firstChoice: 'ai', questions }).map(({ index }) => index), [1, 4]);
+  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { decisionStatus: null, firstChoice: null, questions: [{ question: headers[2], answer: 'no' }] }).map(({ index }) => index), [2]);
+  assert.deepEqual(filterRowsByApplicationFilters(rows, headers, { decisionStatus: null, firstChoice: 'ai', questions: [] }).map(({ index }) => index), [1, 3, 4]);
 });
 
 test('missing questions produce no matches, and header reordering does not change the selected question', () => {
-  const filters = { firstChoice: null, questions: [{ question: headers[2], answer: 'yes' as const }] };
+  const filters = { decisionStatus: null, firstChoice: null, questions: [{ question: headers[2], answer: 'yes' as const }] };
   assert.deepEqual(filterRowsByApplicationFilters(rows, ['Changed'], filters), []);
   assert.equal(filterRowsByApplicationFilters([{ index: 1, data: ['yes', 'AI'] }], [headers[2], 'First Choice'], filters).length, 1);
 });
@@ -53,7 +53,7 @@ test('canonicalizes legacy section URLs while preserving Assigned, other paramet
     assert.equal(next.get('q'), '1');
   }
   const params = new URLSearchParams('filter=assignedToMe&q=8&extra=keep');
-  const filters = { firstChoice: 'design' as const, questions: [{ question: 'Question with & and :?', answer: 'no' as const }] };
+  const filters = { decisionStatus: null, firstChoice: 'design' as const, questions: [{ question: 'Question with & and :?', answer: 'no' as const }] };
   const next = writeApplicationFilters(params, filters);
   assert.equal(next.get('filter'), 'assignedToMe');
   assert.equal(next.get('extra'), 'keep');
@@ -64,7 +64,7 @@ test('canonicalizes legacy section URLs while preserving Assigned, other paramet
 test('ignores malformed and duplicate answer parameters without discarding valid filters', () => {
   const params = new URLSearchParams('firstChoice=invalid&answer=not-json');
   for (const item of [['Valid?', 'yes'], ['Valid?', 'no'], ['Other?', 'maybe'], [4, 'yes'], ['', 'no']]) params.append('answer', JSON.stringify(item));
-  assert.deepEqual(readApplicationFilters(params), { firstChoice: null, questions: [{ question: 'Valid?', answer: 'yes' }] });
+  assert.deepEqual(readApplicationFilters(params), { decisionStatus: null, firstChoice: null, questions: [{ question: 'Valid?', answer: 'yes' }] });
 });
 
 test('validates and clamps page indexes after filtering', () => {
@@ -79,7 +79,7 @@ test('preserves and canonicalizes legacy Assigned aliases', () => {
   for (const query of ['filter=mine', 'filter=assigned_to_me', 'filter=ASSIGNEDTOME', 'name=mine']) {
     const params = new URLSearchParams(query);
     assert.equal(readQueueScope(params), 'assignedToMe');
-    assert.equal(writeApplicationFilters(params, { firstChoice: 'ai', questions: [] }).get('filter'), 'assignedToMe');
+    assert.equal(writeApplicationFilters(params, { decisionStatus: null, firstChoice: 'ai', questions: [] }).get('filter'), 'assignedToMe');
   }
 });
 
@@ -136,7 +136,7 @@ test('writing a search resets pagination, drops a pinned application and keeps o
 
 test('applying popover filters preserves an active search term', () => {
   const searched = writeApplicantSearch(new URLSearchParams('q=4'), 'may', 1);
-  const applied = writeApplicationFilters(searched, { firstChoice: 'design', questions: [] });
+  const applied = writeApplicationFilters(searched, { decisionStatus: null, firstChoice: 'design', questions: [] });
   assert.equal(applied.get('search'), 'may');
   assert.equal(applied.get('firstChoice'), 'design');
   assert.equal(applied.get('q'), '1');
@@ -159,4 +159,65 @@ test('matches applicants on name or email, folding case, accents and repeated sp
   // With no headers the resolver falls back to the original form columns.
   assert.equal(matchesApplicantSearch([], ['t', 'maya@acmucsd.org', 'Maya Patel'], 'maya'), true);
   assert.equal(matchesApplicantSearch(searchHeaders, [], 'maya'), false);
+});
+
+const decisionRows = [
+  { index: 1, data: ['Accepted applicant', 'AI', 'yes'] },
+  { index: 2, data: ['Waitlisted applicant', 'Design', 'no'] },
+  { index: 3, data: ['Rejected applicant', 'AI', 'yes'] },
+  { index: 4, data: ['Comment only applicant', 'AI', 'yes'] },
+  { index: 5, data: ['Untouched applicant', 'Design', 'no'] },
+];
+const decisionReviews = {
+  'sheet-row:1': { decision: 'accept' as const },
+  'sheet-row:2': { decision: 'waitlist' as const },
+  'sheet-row:3': { decision: 'reject' as const },
+  'sheet-row:4': { decision: null },
+};
+
+test('decision status uses saved decisions; None includes null decisions and applicants without reviews', () => {
+  for (const [decisionStatus, expected] of [
+    ['accept', [1]], ['waitlist', [2]], ['reject', [3]], ['none', [4, 5]], [null, [1, 2, 3, 4, 5]],
+  ] as const) {
+    assert.deepEqual(filterRowsByApplicationFilters(decisionRows, headers, {
+      decisionStatus, firstChoice: null, questions: [],
+    }, decisionReviews).map(({ index }) => index), expected);
+  }
+});
+
+test('decision filtering combines with first choice, questions, search and an already scoped queue', () => {
+  const filters = { decisionStatus: 'none' as const, firstChoice: 'ai' as const, questions: [{ question: headers[2], answer: 'yes' as const }] };
+  const matched = filterRowsByApplicationFilters(decisionRows, headers, filters, decisionReviews);
+  assert.deepEqual(matched.map(({ index }) => index), [4]);
+  assert.deepEqual(filterRowsByApplicantSearch(matched, headers, 'comment only').map(({ index }) => index), [4]);
+  assert.deepEqual(filterRowsByApplicationFilters(decisionRows.slice(0, 3), headers, filters, decisionReviews), []);
+});
+
+test('unknown review data never counts as None, and a saved decision removes an applicant from None', () => {
+  const filters = { decisionStatus: 'none' as const, firstChoice: null, questions: [] };
+  assert.deepEqual(filterRowsByApplicationFilters(decisionRows, headers, filters, null), []);
+  assert.equal(filterRowsByApplicationFilters(decisionRows, headers, { ...filters, decisionStatus: null }, null).length, 5);
+  assert.equal(filterRowsByApplicationFilters(decisionRows, headers, filters, {}).length, 5);
+  const updated = { ...decisionReviews, 'sheet-row:4': { decision: 'accept' as const } };
+  assert.deepEqual(filterRowsByApplicationFilters(decisionRows, headers, filters, updated).map(({ index }) => index), [5]);
+});
+
+test('decision URLs survive reload, search and queue changes and clear with Reset', () => {
+  for (const decisionStatus of ['accept', 'waitlist', 'reject', 'none'] as const) {
+    const filters = { decisionStatus, firstChoice: 'ai' as const, questions: [] };
+    const params = new URLSearchParams('filter=assignedToMe&search=applicant&q=9&application=sheet-row:4');
+    const written = writeApplicationFilters(params, filters);
+    assert.deepEqual(readApplicationFilters(new URLSearchParams(written.toString())), filters);
+    assert.equal(written.get('q'), '1');
+    assert.equal(written.has('application'), false);
+    assert.equal(written.get('filter'), 'assignedToMe');
+    assert.equal(written.get('search'), 'applicant');
+    assert.equal(writeApplicantSearch(written, 'new', 1).get('decision'), decisionStatus);
+    const reset = writeApplicationFilters(written, { decisionStatus: null, firstChoice: null, questions: [] });
+    assert.equal(reset.has('decision'), false);
+    assert.equal(reset.get('search'), 'applicant');
+  }
+  for (const value of ['accepted', 'invalid', 'null', '']) {
+    assert.equal(readApplicationFilters(new URLSearchParams({ decision: value })).decisionStatus, null);
+  }
 });

@@ -525,7 +525,7 @@ export default function GoogleSheetViewer() {
       rows: allRows,
     });
 
-    const matched = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
+    const matched = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams), reviewsReady ? reviewsByApplicationId : null);
     rowsBeforeSearch.current = matched;
     const filtered = filterRowsByApplicantSearch(matched, headers, readApplicantSearch(searchParams));
     setFilteredRows(filtered);
@@ -558,6 +558,8 @@ export default function GoogleSheetViewer() {
     assignments,
     headers,
     reviewer,
+    reviewsByApplicationId,
+    reviewsReady,
     searchParams,
   ]);
 
@@ -961,7 +963,7 @@ export default function GoogleSheetViewer() {
   // The pills must count what the queue actually holds, search included.
   const getQueueFilterCount = (filter: QueueFilterKey) =>
     filterRowsByApplicantSearch(
-      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters),
+      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters, reviewsReady ? reviewsByApplicationId : null),
       headers,
       appliedSearch,
     ).length;
@@ -983,8 +985,9 @@ export default function GoogleSheetViewer() {
   const isAssignmentScopedLoading =
     activeQueueFilter === 'assignedToMe' && isAssignmentsLoading;
   const isReviewLoading =
-    (isLoading || isAssignmentScopedLoading) &&
-    (!headers.length || !currentRow.length);
+    ((isLoading || isAssignmentScopedLoading) &&
+    (!headers.length || !currentRow.length)) ||
+    Boolean(appliedFilters.decisionStatus && !reviewsReady && !reviewsWarning);
   const reviewDataWarning = [assignmentWarning, reviewsWarning, saveError]
     .filter(Boolean)
     .join(' ');
@@ -992,12 +995,17 @@ export default function GoogleSheetViewer() {
   const hasUnavailableApplication = searchParams.has('application') && selectionIndex === -1;
   const hasEmptyFilteredQueue =
     !hasReviewLoadError && !isReviewLoading && (!filteredRows.length || hasUnavailableApplication);
-  const emptyQueueTitle = hasUnavailableApplication
+  const isDecisionStatusUnavailable = Boolean(appliedFilters.decisionStatus && !reviewsReady && reviewsWarning);
+  const emptyQueueTitle = isDecisionStatusUnavailable
+    ? 'Decision status unavailable'
+    : hasUnavailableApplication
     ? 'Application unavailable'
     : appliedSearch
       ? 'No matching applicants'
       : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
-  const emptyQueueDescription = hasUnavailableApplication
+  const emptyQueueDescription = isDecisionStatusUnavailable
+    ? 'Saved decisions could not be loaded. Retry to filter applicants by decision status.'
+    : hasUnavailableApplication
     ? 'This application is not available in the current queue. Choose All applications to continue.'
     : appliedSearch
       ? `No applicants match "${appliedSearch}" in this queue.`
@@ -1186,6 +1194,12 @@ export default function GoogleSheetViewer() {
                   {emptyQueueDescription}
                 </p>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  {isDecisionStatusUnavailable ? (
+                    <button type="button" onClick={() => void fetchApplicationReviews()}
+                      className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                      Retry
+                    </button>
+                  ) : null}
                   {hasUnavailableApplication ? (
                     <Link to={createQueueFilterHref('all')}
                       className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">

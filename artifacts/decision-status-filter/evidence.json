@@ -1,0 +1,71 @@
+{
+  "feature": "Applicants decision status filter",
+  "date": "2026-10-08",
+  "implementation": {
+    "statuses": [
+      "Accepted",
+      "Waitlist",
+      "Rejected",
+      "None"
+    ],
+    "selection": "One status; click selected status again to clear. Apply commits; Reset clears filters.",
+    "source": "Existing saved review decisions",
+    "none": "Absent review or null decision; comments and ratings alone do not count as decisions"
+  },
+  "browser": {
+    "fixture": "Development Sheet applicants and intercepted API responses; no production writes",
+    "checks": [
+      "Accepted shows selected state",
+      "Accepted applies to URL",
+      "Accepted filters queue and count",
+      "Accepted survives reload",
+      "Accepted clears on second click",
+      "Waitlist shows selected state",
+      "Waitlist applies to URL",
+      "Waitlist filters queue and count",
+      "Waitlist survives reload",
+      "Waitlist clears on second click",
+      "Rejected shows selected state",
+      "Rejected applies to URL",
+      "Rejected filters queue and count",
+      "Rejected survives reload",
+      "Rejected clears on second click",
+      "None selects applicant without a saved review",
+      "Removed helper text stays absent",
+      "None combines with first choice and question answer; badge counts three filters",
+      "Search preserves decision filter",
+      "Reset clears draft selection",
+      "Reset clears decision while preserving search",
+      "Decision filter intersects Assigned scope",
+      "Impossible combined filters show the empty state",
+      "Saving a decision removes that applicant from the None queue",
+      "Failed reviews do not misclassify applicants as None",
+      "Retry restores status filtering",
+      "Mobile panel stays inside viewport",
+      "Mobile Apply stays visible",
+      "Mobile page has no horizontal overflow",
+      "Escape closes filters",
+      "Escape restores trigger focus"
+    ],
+    "passed": 31
+  },
+  "unitTests": {
+    "passed": 42,
+    "failed": 0,
+    "log": "unit-tests.tap"
+  },
+  "build": {
+    "result": "passed",
+    "log": "build.log"
+  },
+  "lint": {
+    "result": "passed",
+    "log": "lint.log"
+  },
+  "scope": "Local implementation verified with development Sheet data and intercepted API fixtures; no live database writes or deployment performed.",
+  "screenshots": [
+    "desktop-none-selected.png",
+    "mobile-none-selected.png",
+    "empty-results.png"
+  ]
+}

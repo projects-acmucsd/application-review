@@ -1,0 +1,262 @@
+TAP version 13
+# Subtest: detects exact binary answers, skips blanks, metadata, mixed answers and duplicate headers
+ok 1 - detects exact binary answers, skips blanks, metadata, mixed answers and duplicate headers
+  ---
+  duration_ms: 1.412292
+  type: 'test'
+  ...
+# Subtest: combines first choice with all question conditions and never matches blank answers
+ok 2 - combines first choice with all question conditions and never matches blank answers
+  ---
+  duration_ms: 0.237458
+  type: 'test'
+  ...
+# Subtest: missing questions produce no matches, and header reordering does not change the selected question
+ok 3 - missing questions produce no matches, and header reordering does not change the selected question
+  ---
+  duration_ms: 0.054291
+  type: 'test'
+  ...
+# Subtest: canonicalizes legacy section URLs while preserving Assigned, other parameters and resetting pagination
+ok 4 - canonicalizes legacy section URLs while preserving Assigned, other parameters and resetting pagination
+  ---
+  duration_ms: 0.318125
+  type: 'test'
+  ...
+# Subtest: ignores malformed and duplicate answer parameters without discarding valid filters
+ok 5 - ignores malformed and duplicate answer parameters without discarding valid filters
+  ---
+  duration_ms: 0.099875
+  type: 'test'
+  ...
+# Subtest: validates and clamps page indexes after filtering
+ok 6 - validates and clamps page indexes after filtering
+  ---
+  duration_ms: 0.065625
+  type: 'test'
+  ...
+# Subtest: preserves and canonicalizes legacy Assigned aliases
+ok 7 - preserves and canonicalizes legacy Assigned aliases
+  ---
+  duration_ms: 0.093583
+  type: 'test'
+  ...
+# Subtest: uses one priority source while queue scope remains independent
+ok 8 - uses one priority source while queue scope remains independent
+  ---
+  duration_ms: 0.112167
+  type: 'test'
+  ...
+# Subtest: retains binary questions with metadata words and disambiguates repeated section questions
+ok 9 - retains binary questions with metadata words and disambiguates repeated section questions
+  ---
+  duration_ms: 0.17775
+  type: 'test'
+  ...
+# Subtest: reads the search term without colliding with the legacy name alias
+ok 10 - reads the search term without colliding with the legacy name alias
+  ---
+  duration_ms: 0.241125
+  type: 'test'
+  ...
+# Subtest: writing a search resets pagination, drops a pinned application and keeps other filters
+ok 11 - writing a search resets pagination, drops a pinned application and keeps other filters
+  ---
+  duration_ms: 0.081333
+  type: 'test'
+  ...
+# Subtest: applying popover filters preserves an active search term
+ok 12 - applying popover filters preserves an active search term
+  ---
+  duration_ms: 0.089542
+  type: 'test'
+  ...
+# Subtest: matches applicants on name or email, folding case, accents and repeated spaces
+ok 13 - matches applicants on name or email, folding case, accents and repeated spaces
+  ---
+  duration_ms: 0.65075
+  type: 'test'
+  ...
+# Subtest: decision status uses saved decisions; None includes null decisions and applicants without reviews
+ok 14 - decision status uses saved decisions; None includes null decisions and applicants without reviews
+  ---
+  duration_ms: 0.057375
+  type: 'test'
+  ...
+# Subtest: decision filtering combines with first choice, questions, search and an already scoped queue
+ok 15 - decision filtering combines with first choice, questions, search and an already scoped queue
+  ---
+  duration_ms: 0.058792
+  type: 'test'
+  ...
+# Subtest: unknown review data never counts as None, and a saved decision removes an applicant from None
+ok 16 - unknown review data never counts as None, and a saved decision removes an applicant from None
+  ---
+  duration_ms: 0.039916
+  type: 'test'
+  ...
+# Subtest: decision URLs survive reload, search and queue changes and clear with Reset
+ok 17 - decision URLs survive reload, search and queue changes and clear with Reset
+  ---
+  duration_ms: 0.234416
+  type: 'test'
+  ...
+# Subtest: includes every saved decision, including accepted applicants without ratings
+ok 18 - includes every saved decision, including accepted applicants without ratings
+  ---
+  duration_ms: 1.14075
+  type: 'test'
+  ...
+# Subtest: sorts ratings descending with null last, then names ignoring case and IDs deterministically
+ok 19 - sorts ratings descending with null last, then names ignoring case and IDs deterministically
+  ---
+  duration_ms: 6.096625
+  type: 'test'
+  ...
+# Subtest: keeps missing-sheet records in the count without linking to a guessed application
+ok 20 - keeps missing-sheet records in the count without linking to a guessed application
+  ---
+  duration_ms: 0.122667
+  type: 'test'
+  ...
+# Subtest: uses the detected overall first-choice column instead of a fixed sheet position
+ok 21 - uses the detected overall first-choice column instead of a fixed sheet position
+  ---
+  duration_ms: 0.394334
+  type: 'test'
+  ...
+# Subtest: retains the legacy first-choice fallback when headers have no overall first choice
+ok 22 - retains the legacy first-choice fallback when headers have no overall first choice
+  ---
+  duration_ms: 0.061625
+  type: 'test'
+  ...
+# Subtest: preserves the saved update and uses reviewer email only when the name is blank
+ok 23 - preserves the saved update and uses reviewer email only when the name is blank
+  ---
+  duration_ms: 0.06125
+  type: 'test'
+  ...
+# Subtest: returns all empty groups when there are no saved decisions
+ok 24 - returns all empty groups when there are no saved decisions
+  ---
+  duration_ms: 0.128292
+  type: 'test'
+  ...
+# Subtest: reads applicant email from the general email column, independently of reviewer email
+ok 25 - reads applicant email from the general email column, independently of reviewer email
+  ---
+  duration_ms: 0.060583
+  type: 'test'
+  ...
+# Subtest: retains the legacy applicant email column when there is no labelled email header
+ok 26 - retains the legacy applicant email column when there is no labelled email header
+  ---
+  duration_ms: 0.156125
+  type: 'test'
+  ...
+# Subtest: formats only the selected decision group as comma-separated applicant emails
+ok 27 - formats only the selected decision group as comma-separated applicant emails
+  ---
+  duration_ms: 0.305208
+  type: 'test'
+  ...
+# Subtest: deduplicates emails ignoring case and skips blank or malformed addresses
+ok 28 - deduplicates emails ignoring case and skips blank or malformed addresses
+  ---
+  duration_ms: 0.056083
+  type: 'test'
+  ...
+# Subtest: copies first-choice groups within each decision, independently of the table search
+ok 29 - copies first-choice groups within each decision, independently of the table search
+  ---
+  duration_ms: 0.527292
+  type: 'test'
+  ...
+# Subtest: copy group counts use unique valid emails and keep unknown first choices in All Applicants
+ok 30 - copy group counts use unique valid emails and keep unknown first choices in All Applicants
+  ---
+  duration_ms: 0.063125
+  type: 'test'
+  ...
+# Subtest: does not substitute another column when the detected email cell is empty
+ok 31 - does not substitute another column when the detected email cell is empty
+  ---
+  duration_ms: 0.049667
+  type: 'test'
+  ...
+# Subtest: searching decision groups matches name or email and leaves the order alone
+ok 32 - searching decision groups matches name or email and leaves the order alone
+  ---
+  duration_ms: 0.125
+  type: 'test'
+  ...
+# Subtest: legacy comments remain visible until cloud migration; clearing never restores Sheet text
+ok 33 - legacy comments remain visible until cloud migration; clearing never restores Sheet text
+  ---
+  duration_ms: 0.366042
+  type: 'test'
+  ...
+# Subtest: cloud state replaces initial Sheet state when reviews arrive
+ok 34 - cloud state replaces initial Sheet state when reviews arrive
+  ---
+  duration_ms: 0.084917
+  type: 'test'
+  ...
+# Subtest: polling keeps all draft values and the original saved version while editing
+ok 35 - polling keeps all draft values and the original saved version while editing
+  ---
+  duration_ms: 0.058084
+  type: 'test'
+  ...
+# Subtest: cancel restores the latest authoritative review after a conflicting save
+ok 36 - cancel restores the latest authoritative review after a conflicting save
+  ---
+  duration_ms: 0.040167
+  type: 'test'
+  ...
+# Subtest: successful save uses the returned version and an intentional empty comment
+ok 37 - successful save uses the returned version and an intentional empty comment
+  ---
+  duration_ms: 0.086834
+  type: 'test'
+  ...
+# Subtest: a save finishing after navigation cannot overwrite the next applicant draft
+ok 38 - a save finishing after navigation cannot overwrite the next applicant draft
+  ---
+  duration_ms: 0.037333
+  type: 'test'
+  ...
+# Subtest: direct application links resolve the saved ID after queue sorting
+ok 39 - direct application links resolve the saved ID after queue sorting
+  ---
+  duration_ms: 0.402959
+  type: 'test'
+  ...
+# Subtest: a missing or invalid explicit application never selects someone else
+ok 40 - a missing or invalid explicit application never selects someone else
+  ---
+  duration_ms: 0.054292
+  type: 'test'
+  ...
+# Subtest: ordinary pagination remains one-based, clamps to the queue, and defaults safely
+ok 41 - ordinary pagination remains one-based, clamps to the queue, and defaults safely
+  ---
+  duration_ms: 0.077417
+  type: 'test'
+  ...
+# Subtest: applying filters clears a direct application selection and restarts pagination
+ok 42 - applying filters clears a direct application selection and restarts pagination
+  ---
+  duration_ms: 0.236541
+  type: 'test'
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 223.608958

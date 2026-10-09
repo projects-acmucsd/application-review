@@ -1,6 +1,7 @@
 import {
   getApplicantEmail,
   getApplicantName,
+  getApplicationId,
   getFirstChoiceTrack,
   getPriorityColumnIndexes,
   getSheetQuestionLabel,
@@ -9,6 +10,7 @@ import {
   type SheetRow,
   type TrackKey,
 } from './googleSheetData';
+import type { ApplicationReview, ReviewDecision } from './reviewApi';
 
 export type QueueScope = 'all' | 'assignedToMe';
 
@@ -18,11 +20,13 @@ export function readQueueScope(params: URLSearchParams): QueueScope {
 }
 
 export type BinaryAnswer = 'yes' | 'no';
+export type DecisionStatus = ReviewDecision | 'none';
 export interface QuestionFilter {
   question: string;
   answer: BinaryAnswer;
 }
 export interface ApplicationFilters {
+  decisionStatus: DecisionStatus | null;
   firstChoice: TrackKey | null;
   questions: QuestionFilter[];
 }
@@ -54,6 +58,8 @@ export function getBinaryQuestions(headers: string[], rows: SheetRow[]): BinaryQ
 }
 
 export function readApplicationFilters(params: URLSearchParams): ApplicationFilters {
+  const status = params.get('decision');
+  const decisionStatus = status === 'accept' || status === 'waitlist' || status === 'reject' || status === 'none' ? status : null;
   const firstChoice = normalizeSheetTrackName(params.get('firstChoice') ?? '') ??
     normalizeSheetTrackName(params.get('filter') ?? '') ??
     (!params.has('filter') ? normalizeSheetTrackName(params.get('name') ?? '') : null);
@@ -69,7 +75,7 @@ export function readApplicationFilters(params: URLSearchParams): ApplicationFilt
       questions.push({ question, answer });
     } catch { /* Ignore malformed links without breaking the review queue. */ }
   }
-  return { firstChoice, questions };
+  return { decisionStatus, firstChoice, questions };
 }
 
 export function writeApplicationFilters(params: URLSearchParams, filters: ApplicationFilters): URLSearchParams {
@@ -81,17 +87,27 @@ export function writeApplicationFilters(params: URLSearchParams, filters: Applic
   next.delete('name');
   next.delete('firstChoice');
   next.delete('answer');
+  next.delete('decision');
   next.set('q', '1');
   if (filters.firstChoice) next.set('firstChoice', filters.firstChoice);
+  if (filters.decisionStatus) next.set('decision', filters.decisionStatus);
   for (const { question, answer } of filters.questions) {
     next.append('answer', JSON.stringify([question, answer]));
   }
   return next;
 }
 
-export function filterRowsByApplicationFilters(rows: SheetRow[], headers: string[], filters: ApplicationFilters): SheetRow[] {
+export function filterRowsByApplicationFilters(
+  rows: SheetRow[],
+  headers: string[],
+  filters: ApplicationFilters,
+  reviews: Readonly<Record<string, Pick<ApplicationReview, 'decision'>>> | null = null,
+): SheetRow[] {
+  // Unknown review data must never classify every applicant as having no decision.
+  if (filters.decisionStatus && reviews === null) return [];
   const conditions = filters.questions.map(({ question, answer }) => ({ index: headers.indexOf(question), answer }));
   return rows.filter((row) =>
+    (!filters.decisionStatus || (reviews?.[getApplicationId(row)]?.decision ?? 'none') === filters.decisionStatus) &&
     (!filters.firstChoice || getFirstChoiceTrack(headers, row.data) === filters.firstChoice) &&
     conditions.every(({ index, answer }) => index >= 0 && normalizeBinaryAnswer(row.data[index] ?? '') === answer),
   );
