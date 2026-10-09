@@ -105,6 +105,50 @@ export function getSheetQuestionLabel(header: string): string {
   return parseSheetSectionHeader(header).question;
 }
 
+// The original Google Form puts the applicant email in column B and the name in
+// column C. Resolve by header first so a re-ordered sheet still works, and keep
+// those indexes as the fallback for sheets whose columns are unlabelled.
+const LEGACY_APPLICANT_EMAIL_COLUMN = 1;
+const LEGACY_APPLICANT_NAME_COLUMN = 2;
+
+function getGeneralHeaderLabels(headers: string[]): string[] {
+  return headers.map((header) => {
+    const { sectionKey, question } = parseSheetSectionHeader(header);
+    // A name question inside a track section belongs to that track, not the applicant.
+    return sectionKey && sectionKey !== 'general'
+      ? ''
+      : question.toLowerCase().replace(/[^a-z0-9]/g, '');
+  });
+}
+
+export function getApplicantNameColumn(headers: string[]): number {
+  const labels = getGeneralHeaderLabels(headers);
+  const exact = labels.findIndex((label) =>
+    ['name', 'applicantname', 'fullname', 'preferredname'].includes(label),
+  );
+  if (exact !== -1) return exact;
+
+  const partial = labels.findIndex((label) => /^(?:first|legal|full|preferred)?name$/.test(label));
+  return partial === -1 ? LEGACY_APPLICANT_NAME_COLUMN : partial;
+}
+
+export function getApplicantEmailColumn(headers: string[]): number {
+  const labels = getGeneralHeaderLabels(headers);
+  const exact = labels.findIndex((label) => label === 'email' || label === 'emailaddress');
+  if (exact !== -1) return exact;
+
+  const school = labels.findIndex((label) => /^(?:ucsd|school|student)email(?:address)?$/.test(label));
+  return school === -1 ? LEGACY_APPLICANT_EMAIL_COLUMN : school;
+}
+
+export function getApplicantName(headers: string[], rowData: string[]): string {
+  return rowData[getApplicantNameColumn(headers)]?.trim() ?? '';
+}
+
+export function getApplicantEmail(headers: string[], rowData: string[]): string {
+  return rowData[getApplicantEmailColumn(headers)]?.trim() ?? '';
+}
+
 function createEmptySectionIndexes(): Record<SheetSectionKey, number[]> {
   return {
     ai: [],

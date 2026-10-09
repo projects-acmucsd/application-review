@@ -3,13 +3,18 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ApplicationFiltersPopover } from '../components/ApplicationFiltersPopover';
 import {
+  filterRowsByApplicantSearch,
   filterRowsByApplicationFilters,
   getBinaryQuestions,
+  readApplicantSearch,
   readApplicationFilters,
   readQueueScope,
+  writeApplicantSearch,
   writeApplicationFilters,
 } from '../lib/applicationFilters';
+import { ApplicantSearchField } from '../components/ApplicantSearchField';
 import { InternalShell } from '../components/InternalShell';
+import { ReviewToolbar } from '../components/ReviewToolbar';
 import {
   ReviewAnswersSkeleton,
   ReviewPanelSkeleton,
@@ -30,6 +35,7 @@ import {
   signOutFromGoogle,
 } from '../lib/googleAuth';
 import {
+  getApplicantName,
   getFirstChoiceTrack,
   getApplicationId,
   getPriorityColumnIndexes,
@@ -320,6 +326,15 @@ export default function GoogleSheetViewer() {
     [headers, allRows],
   );
   const appliedFilters = readApplicationFilters(searchParams);
+  const appliedSearch = readApplicantSearch(searchParams);
+  // The input is local so typing never waits on a URL round-trip, which would
+  // reset the caret mid-word. pushedSearch tracks what we last wrote so an
+  // external URL change (Back, Clear) can adopt without clobbering live typing.
+  const [searchInput, setSearchInput] = useState(appliedSearch);
+  const pushedSearch = useRef(appliedSearch);
+  // The queue with every filter except search applied, so a new term can be
+  // previewed without rebuilding the whole pipeline.
+  const rowsBeforeSearch = useRef<SheetRow[]>([]);
   const [editor, dispatchEditor] = useReducer(
     reviewEditorReducer,
     EMPTY_REVIEW_EDITOR,
@@ -510,7 +525,9 @@ export default function GoogleSheetViewer() {
       rows: allRows,
     });
 
-    const filtered = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
+    const matched = filterRowsByApplicationFilters(scopedRows, headers, readApplicationFilters(searchParams));
+    rowsBeforeSearch.current = matched;
+    const filtered = filterRowsByApplicantSearch(matched, headers, readApplicantSearch(searchParams));
     setFilteredRows(filtered);
 
     const selectionIndex = getReviewSelectionIndex({
@@ -890,6 +907,16 @@ export default function GoogleSheetViewer() {
     navigate('/');
   };
 
+  const resetEditor = () => {
+    dispatchEditor({
+      type: 'reset',
+      applicationId,
+      review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
+      legacyComment: getReviewerCommentValue(headers, currentRow),
+    });
+    setSaveError('');
+  };
+
   const activeQueueFilter = readQueueScope(searchParams);
   const selectionIndex = getReviewSelectionIndex({
     rows: filteredRows,
@@ -897,7 +924,7 @@ export default function GoogleSheetViewer() {
     page: searchParams.get('q'),
   });
   const currentPage = selectionIndex + 1;
-  const applicantName = currentRow[2] || 'Loading applicant';
+  const applicantName = getApplicantName(headers, currentRow) || 'Loading applicant';
   const firstChoiceTrack = getFirstChoiceTrack(headers, currentRow);
   const firstChoice = firstChoiceTrack
     ? getSectionTitle(firstChoiceTrack)
@@ -931,8 +958,13 @@ export default function GoogleSheetViewer() {
     reviewer,
     rows: allRows,
   });
+  // The pills must count what the queue actually holds, search included.
   const getQueueFilterCount = (filter: QueueFilterKey) =>
-    filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters).length;
+    filterRowsByApplicantSearch(
+      filterRowsByApplicationFilters(getQueueRows(filter), headers, appliedFilters),
+      headers,
+      appliedSearch,
+    ).length;
   const hasNoAssignments = activeQueueFilter === 'assignedToMe' && !getQueueRows('assignedToMe').length;
   const filterTracks = SECTION_CONFIGS.flatMap(({ key, title }) =>
     key === 'general' || key === 'other' ? [] : [{ key, label: title }],
@@ -962,18 +994,53 @@ export default function GoogleSheetViewer() {
     !hasReviewLoadError && !isReviewLoading && (!filteredRows.length || hasUnavailableApplication);
   const emptyQueueTitle = hasUnavailableApplication
     ? 'Application unavailable'
-    : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
+    : appliedSearch
+      ? 'No matching applicants'
+      : hasNoAssignments ? 'No assigned applications' : 'No matching applications';
   const emptyQueueDescription = hasUnavailableApplication
     ? 'This application is not available in the current queue. Choose All applications to continue.'
-    : hasNoAssignments
-      ? 'There are no applications assigned to you right now.'
-      : 'No applications match the current filter.';
+    : appliedSearch
+      ? `No applicants match "${appliedSearch}" in this queue.`
+      : hasNoAssignments
+        ? 'There are no applications assigned to you right now.'
+        : 'No applications match the current filter.';
 
   useEffect(() => {
     if (!visibleAnswerSections.some((section) => section.key === selectedSectionKey)) {
       setSelectedSectionKey('general');
     }
   }, [selectedSectionKey, visibleAnswerSections]);
+
+  // Adopt a term changed outside the box, such as Back or a shared link.
+  useEffect(() => {
+    if (appliedSearch !== pushedSearch.current) {
+      pushedSearch.current = appliedSearch;
+      setSearchInput(appliedSearch);
+    }
+  }, [appliedSearch]);
+
+  // Debounced so a half-typed term never reaches the queue. An intermediate term
+  // that matches nobody would clear the selected applicant, and the editor only
+  // preserves a draft while the application id holds steady.
+  useEffect(() => {
+    if (searchInput.trim() === appliedSearch) return;
+
+    const timer = setTimeout(() => {
+      const nextRows = filterRowsByApplicantSearch(rowsBeforeSearch.current, headers, searchInput);
+      // Stay on the current applicant when they survive the new term.
+      const stickyIndex = applicationId
+        ? nextRows.findIndex((row) => getApplicationId(row) === applicationId)
+        : -1;
+      pushedSearch.current = searchInput.trim();
+      setSearchParams(
+        writeApplicantSearch(searchParams, searchInput, stickyIndex === -1 ? 1 : stickyIndex + 1),
+        // Replace, or every keystroke becomes its own history entry.
+        { replace: true },
+      );
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [appliedSearch, applicationId, headers, searchInput, searchParams, setSearchParams]);
 
   return (
     <>
@@ -1019,12 +1086,31 @@ export default function GoogleSheetViewer() {
         onSignOut={() => void signOut()}
         reviewerName={reviewer ? `Signed in as ${reviewer.reviewerName}` : undefined}
         showAdmin={isAdmin}
+        toolbar={
+          !isReviewLoading && !hasReviewLoadError && !hasEmptyFilteredQueue ? (
+            <ReviewToolbar
+              currentPage={currentPage}
+              filteredCount={filteredRows.length}
+              hasNext={hasNext}
+              hasPrevious={hasPrevious}
+              isEditing={isEditing}
+              isReady={reviewsReady && editor.applicationId === applicationId}
+              isSaving={isSavingReview}
+              nextHref={hasNext ? createReviewHref(currentPage + 1) : undefined}
+              previousHref={
+                hasPrevious ? createReviewHref(currentPage - 1) : undefined
+              }
+              saveComment={saveComment}
+              onReset={resetEditor}
+            />
+          ) : undefined
+        }
       >
-        <main className="mx-auto min-h-[calc(100vh-5.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
+        <main className="mx-auto min-h-[calc(100vh-8.275rem)] max-w-[1500px] px-5 py-8 sm:px-8">
           {!isReviewLoading ? (
             <section className="portal-surface-quiet px-6 py-4 sm:px-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {QUEUE_FILTERS.map((filter) => {
                     const isActive = activeQueueFilter === filter.key;
                     const count = getQueueFilterCount(filter.key);
@@ -1047,6 +1133,12 @@ export default function GoogleSheetViewer() {
                       </Link>
                     );
                   })}
+                  <ApplicantSearchField
+                    className="w-full sm:w-64"
+                    inputClassName="portal-body portal-muted-field portal-square-field h-10 border py-0 text-[#333] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                    value={searchInput}
+                    onChange={setSearchInput}
+                  />
                 </div>
                 <ApplicationFiltersPopover applied={appliedFilters} questions={binaryQuestions} tracks={filterTracks}
                   onApply={(filters) => setSearchParams(writeApplicationFilters(searchParams, filters))} />
@@ -1093,12 +1185,20 @@ export default function GoogleSheetViewer() {
                 <p className="portal-meta mx-auto mt-3 max-w-xl text-neutral-500">
                   {emptyQueueDescription}
                 </p>
-                {hasUnavailableApplication ? (
-                  <Link to={createQueueFilterHref('all')}
-                    className="portal-control portal-control--large portal-square-control mt-6 inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
-                    All applications
-                  </Link>
-                ) : null}
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  {hasUnavailableApplication ? (
+                    <Link to={createQueueFilterHref('all')}
+                      className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center bg-blue-400 px-6 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2">
+                      All applications
+                    </Link>
+                  ) : null}
+                  {appliedSearch ? (
+                    <button type="button" onClick={() => setSearchInput('')}
+                      className="portal-control portal-control--large portal-square-control inline-flex h-12 items-center justify-center border border-blue-100 bg-white px-6 text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                      Clear search
+                    </button>
+                  ) : null}
+                </div>
               </section>
             ) : (
               <section className="portal-surface p-6 sm:p-8">
@@ -1222,7 +1322,7 @@ export default function GoogleSheetViewer() {
               ) : selectedAnswerSection ? (
                 <article
                   id={selectedAnswerSection.id}
-                  className="portal-surface-quiet scroll-mt-28 overflow-hidden px-6 py-7 sm:px-8"
+                  className="portal-surface-quiet scroll-mt-40 overflow-hidden px-6 py-7 sm:px-8"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
                     <div className="flex items-center gap-3">
@@ -1267,24 +1367,14 @@ export default function GoogleSheetViewer() {
                 </article>
               ) : null}
 
-              <div id="review-panel" className="scroll-mt-28">
+              <div id="review-panel" className="scroll-mt-40">
                 {isReviewLoading ? (
                   <ReviewPanelSkeleton />
                 ) : (
                   <ReviewPanel
                     commentText={commentText}
-                    currentPage={currentPage}
-                    filteredCount={filteredRows.length}
-                    hasNext={hasNext}
-                    hasPrevious={hasPrevious}
-                    isEditing={isEditing}
                     isSaving={isSavingReview}
                     isReady={reviewsReady && editor.applicationId === applicationId}
-                    nextHref={hasNext ? createReviewHref(currentPage + 1) : undefined}
-                    previousHref={
-                      hasPrevious ? createReviewHref(currentPage - 1) : undefined
-                    }
-                    saveComment={saveComment}
                     selectedDecision={draftDecision}
                     selectedRating={draftRating}
                     setCommentText={(value) => dispatchEditor({ type: 'comment', value })}
@@ -1298,15 +1388,6 @@ export default function GoogleSheetViewer() {
                       dispatchEditor({ type: 'rating', value: rating });
                     }}
                     onDraftChange={broadcastCommentDraft}
-                    onReset={() => {
-                      dispatchEditor({
-                        type: 'reset',
-                        applicationId,
-                        review: applicationId ? reviewsByApplicationId[applicationId] : undefined,
-                        legacyComment: getReviewerCommentValue(headers, currentRow),
-                      });
-                      setSaveError('');
-                    }}
                   />
                 )}
               </div>
@@ -1321,18 +1402,10 @@ export default function GoogleSheetViewer() {
 
 interface ReviewPanelProps {
   commentText: string;
-  currentPage: number;
-  filteredCount: number;
-  hasNext: boolean;
-  hasPrevious: boolean;
-  isEditing: boolean;
   isSaving: boolean;
   isReady: boolean;
-  nextHref?: string;
   selectedDecision: ReviewDecision | null;
   selectedRating: number | null;
-  previousHref?: string;
-  saveComment: () => Promise<void>;
   setCommentText: (value: string) => void;
   onBeginEditing: () => void;
   setLastRemoteSave: (value: RemoteCommentUpdate | null) => void;
@@ -1340,21 +1413,12 @@ interface ReviewPanelProps {
   onDecisionChange: (decision: ReviewDecision) => void;
   onDraftChange: (value: string) => void;
   onRatingChange: (rating: number) => void;
-  onReset: () => void;
 }
 
 function ReviewPanel({
   commentText,
-  currentPage,
-  filteredCount,
-  hasNext,
-  hasPrevious,
-  isEditing,
   isSaving,
   isReady,
-  nextHref,
-  previousHref,
-  saveComment,
   selectedDecision,
   selectedRating,
   setCommentText,
@@ -1364,7 +1428,6 @@ function ReviewPanel({
   onDecisionChange,
   onDraftChange,
   onRatingChange,
-  onReset,
 }: ReviewPanelProps) {
   const decisionOptions: Array<{
     decision: ReviewDecision;
@@ -1398,7 +1461,7 @@ function ReviewPanel({
 
   return (
     <div className="comments-section portal-surface-quiet px-6 py-7 sm:px-8">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-stretch">
+      <div className="grid gap-8">
         <section className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1409,25 +1472,6 @@ function ReviewPanel({
                 Rating
               </h2>
             </div>
-            {isEditing ? (
-              <div className="flex gap-2">
-                <button
-                  disabled={isSaving}
-                  onClick={onReset}
-                  className="portal-control bg-neutral-100 px-4 py-2 text-neutral-600 transition-colors hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  aria-busy={isSaving}
-                  disabled={isSaving || !isReady}
-                  onClick={() => void saveComment()}
-                  className="portal-control min-w-20 bg-[#333] px-4 py-2 text-white transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[#333] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
-                >
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            ) : null}
           </div>
 
           {!isReady ? (
@@ -1517,40 +1561,6 @@ function ReviewPanel({
             placeholder="Enter review comments, notes, and decision context here..."
           />
         </section>
-
-        <div className="flex min-h-56 flex-col gap-3 border-t border-neutral-200/70 pt-6 lg:h-full lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-          <div className="text-center">
-            <p className="portal-subheading text-[#333]">
-              {filteredCount ? `${currentPage} of ${filteredCount}` : 'Loading queue'}
-            </p>
-          </div>
-          <div className="grid flex-1 gap-3">
-            {hasNext && nextHref && !isSaving ? (
-              <Link
-                to={nextHref}
-                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-blue-400 px-4 text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-              >
-                Next
-              </Link>
-            ) : (
-              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center bg-neutral-100 px-4 text-neutral-300">
-                Next
-              </span>
-            )}
-            {hasPrevious && previousHref && !isSaving ? (
-              <Link
-                to={previousHref}
-                className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-blue-100 bg-white px-4 text-blue-600 transition-colors hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                Prev
-              </Link>
-            ) : (
-              <span className="portal-control portal-control--large flex min-h-20 w-full items-center justify-center border border-neutral-100 bg-neutral-50 px-4 text-neutral-300">
-                Prev
-              </span>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

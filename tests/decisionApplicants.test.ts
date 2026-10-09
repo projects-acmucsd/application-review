@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildDecisionEmailList, buildDecisionGroups } from '../src/lib/decisionApplicants.ts';
+import { buildDecisionEmailList, buildDecisionGroups, filterDecisionApplicantsBySearch } from '../src/lib/decisionApplicants.ts';
 import type { SheetRow } from '../src/lib/googleSheetData.ts';
 import type { ApplicationReview } from '../src/lib/reviewApi.ts';
 
@@ -225,4 +225,25 @@ test('does not substitute another column when the detected email cell is empty',
 
   assert.deepEqual(buildDecisionEmailList(groups.accept), { emails: [], text: '', missingEmailCount: 1 });
   assert.deepEqual(buildDecisionEmailList([]), { emails: [], text: '', missingEmailCount: 0 });
+});
+
+test('searching decision groups matches name or email and leaves the order alone', () => {
+  const groups = buildDecisionGroups({
+    reviews: [review('sheet-row:1', 'accept', 9), review('sheet-row:2', 'accept', 8), review('sheet-row:3', 'reject', 4)],
+    rows: [row(1, 'Maya Patel'), row(2, 'José Chen'), row(3, 'Alex Rivera')],
+    headers: [],
+  });
+
+  assert.deepEqual(filterDecisionApplicantsBySearch(groups.accept, 'maya').map((a) => a.applicantName), ['Maya Patel']);
+  assert.deepEqual(filterDecisionApplicantsBySearch(groups.accept, 'JOSE').map((a) => a.applicantName), ['José Chen']);
+  assert.deepEqual(filterDecisionApplicantsBySearch(groups.reject, 'maya'), []);
+  // An empty term passes the group straight through, order intact.
+  for (const blank of ['', '   ']) {
+    assert.deepEqual(filterDecisionApplicantsBySearch(groups.accept, blank), groups.accept);
+  }
+  // The counts a reviewer sees on the tabs while searching.
+  assert.deepEqual(
+    (['accept', 'reject'] as const).map((key) => filterDecisionApplicantsBySearch(groups[key], 'rivera').length),
+    [0, 1],
+  );
 });

@@ -28,6 +28,8 @@ import {
   signOutFromGoogle,
 } from '../lib/googleAuth';
 import {
+  getApplicantEmail,
+  getApplicantName,
   getFirstChoiceTrack,
   getApplicationId,
   clearApplicationSheetDataCache,
@@ -267,8 +269,8 @@ export default function Admin() {
       return matchesTrack;
     }
 
-    const applicantName = (row.data[2] || '').toLowerCase();
-    const applicantEmail = (row.data[1] || '').toLowerCase();
+    const applicantName = getApplicantName(headers, row.data).toLowerCase();
+    const applicantEmail = getApplicantEmail(headers, row.data).toLowerCase();
     return (
       matchesTrack &&
       (applicantName.includes(normalizedSearch) ||
@@ -945,7 +947,7 @@ export default function Admin() {
                           >
                             <div>
                               <p className="portal-item-title text-[#333]">
-                                {row.data[2] || 'Unnamed applicant'}
+                                {getApplicantName(headers, row.data) || 'Unnamed applicant'}
                               </p>
                               <p className="portal-meta mt-1 text-neutral-400">
                                 Application {row.index}

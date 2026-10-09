@@ -1,4 +1,6 @@
 import {
+  getApplicantEmail,
+  getApplicantName,
   getFirstChoiceTrack,
   getPriorityColumnIndexes,
   getSheetQuestionLabel,
@@ -93,6 +95,46 @@ export function filterRowsByApplicationFilters(rows: SheetRow[], headers: string
     (!filters.firstChoice || getFirstChoiceTrack(headers, row.data) === filters.firstChoice) &&
     conditions.every(({ index, answer }) => index >= 0 && normalizeBinaryAnswer(row.data[index] ?? '') === answer),
   );
+}
+
+// Search is deliberately not part of ApplicationFilters. The filters popover is a
+// draft/commit control that replaces the whole object on Apply, which would wipe a
+// live search term. Its own parameter also survives writeApplicationFilters, which
+// copies the params and only deletes the keys it owns.
+export function readApplicantSearch(params: URLSearchParams): string {
+  // Keep the typed casing so the UI can quote the term back; matching normalizes separately.
+  return (params.get('search') ?? '').trim();
+}
+
+// Fold case, accents and repeated spaces so "jose" finds "José" and "maya  patel" finds "Maya Patel".
+export function normalizeApplicantSearchText(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// `page` is explicit so the Decisions page, which has no pager, does not gain a stray q=1.
+export function writeApplicantSearch(params: URLSearchParams, value: string, page: number | null): URLSearchParams {
+  const next = new URLSearchParams(params);
+  const search = value.trim();
+  if (search) next.set('search', search);
+  else next.delete('search');
+  if (page !== null) {
+    // A pinned application and the old page both point at the wrong person once matches change.
+    next.delete('application');
+    next.set('q', String(page));
+  }
+  return next;
+}
+
+export function matchesApplicantSearch(headers: string[], rowData: string[], term: string): boolean {
+  const search = normalizeApplicantSearchText(term);
+  if (!search) return true;
+  return normalizeApplicantSearchText(getApplicantName(headers, rowData)).includes(search) ||
+    normalizeApplicantSearchText(getApplicantEmail(headers, rowData)).includes(search);
+}
+
+export function filterRowsByApplicantSearch(rows: SheetRow[], headers: string[], term: string): SheetRow[] {
+  if (!normalizeApplicantSearchText(term)) return rows;
+  return rows.filter((row) => matchesApplicantSearch(headers, row.data, term));
 }
 
 export function getReviewPage(params: URLSearchParams, count: number): number {

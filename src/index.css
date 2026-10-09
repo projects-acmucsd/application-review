@@ -120,6 +120,14 @@ body {
   gap: 0.75rem;
 }
 
+/* Sits inside the sticky header, below the rainbow rule. Aligned to the header
+   content so the pinned toolbar shares the header's gutters. */
+.portal-header-toolbar {
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: 0.625rem 2rem;
+}
+
 .portal-nav {
   display: flex;
   align-items: center;
@@ -183,6 +191,9 @@ body {
   }
   .portal-header-controls {
     flex-wrap: wrap;
+  }
+  .portal-header-toolbar {
+    padding-inline: 1.25rem;
   }
 }
 

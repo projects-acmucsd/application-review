@@ -19,6 +19,8 @@ interface InternalShellProps {
   onSignOut?: () => void;
   reviewerName?: string;
   showAdmin?: boolean;
+  // Rendered inside the sticky header, so it pins without its own offset math.
+  toolbar?: ReactNode;
 }
 
 function AcmLogoMark() {
@@ -103,6 +105,7 @@ export function InternalShell({
   onSignOut,
   reviewerName,
   showAdmin = false,
+  toolbar,
 }: InternalShellProps) {
   const shouldShowAdmin = showAdmin || activePath === 'admin';
   const navItems = [
@@ -146,6 +149,9 @@ export function InternalShell({
           </div>
         </div>
         <div className="h-[0.4rem] w-full bg-[linear-gradient(270deg,#ff6f6f,#f9a857_18.75%,#80ce1c_36.98%,#51c0c0_55.73%,#62b0ff_75%,#816dff)]" />
+        {toolbar ? (
+          <div className="portal-header-toolbar bg-white">{toolbar}</div>
+        ) : null}
       </header>
       {children}
     </div>

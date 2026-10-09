@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  getApplicantEmail,
+  getApplicantEmailColumn,
+  getApplicantName,
+  getApplicantNameColumn,
   getColumnLetter,
   getDynamicSheetValuesRange,
   getFirstChoiceTrack,
@@ -206,4 +210,30 @@ test('track-specific first-choice questions do not override legacy track columns
     { index: 15, priority: 3 },
     { index: 16, priority: 4 },
   ]);
+});
+
+test('resolves the applicant name and email columns from headers, ignoring track sections', () => {
+  const headers = ['Timestamp', 'Email Address', 'Full Name', '[AI] What is your name?'];
+  assert.equal(getApplicantNameColumn(headers), 2);
+  assert.equal(getApplicantEmailColumn(headers), 1);
+  // A name question inside a track section describes that track, not the applicant.
+  assert.equal(getApplicantNameColumn(['Timestamp', 'x', 'y', '[AI] Name']), 2);
+  assert.equal(getApplicantNameColumn(['Name', 'Email']), 0);
+  assert.equal(getApplicantEmailColumn(['Name', 'UCSD Email']), 1);
+  assert.equal(getApplicantEmailColumn(['Name', 'x', 'y', 'Student Email Address']), 3);
+});
+
+test('falls back to the original Google Form columns when no header matches', () => {
+  for (const headers of [[], ['a', 'b', 'c'], Array<string>(17).fill('Question')]) {
+    assert.equal(getApplicantNameColumn(headers), 2);
+    assert.equal(getApplicantEmailColumn(headers), 1);
+  }
+});
+
+test('reads trimmed applicant identity and tolerates short or empty rows', () => {
+  const headers = ['Timestamp', 'Email Address', 'Full Name'];
+  assert.equal(getApplicantName(headers, ['t', 'a@b.co', '  Maria Chen  ']), 'Maria Chen');
+  assert.equal(getApplicantEmail(headers, ['t', ' a@b.co ', 'Maria Chen']), 'a@b.co');
+  assert.equal(getApplicantName(headers, []), '');
+  assert.equal(getApplicantEmail(headers, ['t']), '');
 });

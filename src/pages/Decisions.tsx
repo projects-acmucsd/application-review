@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftIcon, ArrowRightIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, ClockIcon, XCircleIcon } from '@heroicons/react/20/solid';
 
 import { InternalShell } from '../components/InternalShell';
 import { clearCachedAdminAccess, getAdminStatus } from '../lib/adminApi';
-import { buildDecisionEmailList, buildDecisionGroups, type DecisionApplicant } from '../lib/decisionApplicants';
+import { buildDecisionEmailList, buildDecisionGroups, filterDecisionApplicantsBySearch, type DecisionApplicant } from '../lib/decisionApplicants';
+import { readApplicantSearch, writeApplicantSearch } from '../lib/applicationFilters';
+import { ApplicantSearchField } from '../components/ApplicantSearchField';
 import {
   completeGoogleSignInFromRedirect,
   getStoredGoogleProfile,
@@ -150,6 +152,10 @@ export default function Decisions() {
   const selectedDecision: ReviewDecision = requestedDecision === 'waitlist' || requestedDecision === 'reject'
     ? requestedDecision : 'accept';
   const selectedLabel = DECISIONS.find(({ value }) => value === selectedDecision)!.label;
+  const appliedSearch = readApplicantSearch(searchParams);
+  // Local input with a debounced push, matching the review queue. See its comments.
+  const [searchInput, setSearchInput] = useState(appliedSearch);
+  const pushedSearch = useRef(appliedSearch);
   const [reviewerName, setReviewerName] = useState(() => getStoredGoogleProfile()?.name || getStoredGoogleProfile()?.email || '');
   // Admin actions wait for the role response, rather than a localStorage hint.
   const [isAdmin, setIsAdmin] = useState(false);
@@ -203,7 +209,30 @@ export default function Decisions() {
   }, [navigate, reloadVersion]);
 
   const groups = useMemo(() => buildDecisionGroups({ reviews, rows, headers }), [reviews, rows, headers]);
-  const applicants = groups[selectedDecision];
+  // Search every bucket, so the tab counts reveal which decision a name landed in.
+  const searchedGroups = useMemo(() => ({
+    accept: filterDecisionApplicantsBySearch(groups.accept, appliedSearch),
+    waitlist: filterDecisionApplicantsBySearch(groups.waitlist, appliedSearch),
+    reject: filterDecisionApplicantsBySearch(groups.reject, appliedSearch),
+  }), [groups, appliedSearch]);
+  const applicants = searchedGroups[selectedDecision];
+
+  useEffect(() => {
+    if (appliedSearch !== pushedSearch.current) {
+      pushedSearch.current = appliedSearch;
+      setSearchInput(appliedSearch);
+    }
+  }, [appliedSearch]);
+
+  useEffect(() => {
+    if (searchInput.trim() === appliedSearch) return;
+    const timer = setTimeout(() => {
+      pushedSearch.current = searchInput.trim();
+      // No pager on this page, so pass a null page and leave q and application alone.
+      setSearchParams(writeApplicantSearch(searchParams, searchInput, null), { replace: true });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [appliedSearch, searchInput, searchParams, setSearchParams]);
 
   async function signOut() {
     try {
@@ -246,7 +275,7 @@ export default function Decisions() {
                     next.set('decision', value);
                     setSearchParams(next);
                   }}>
-                  {label}<span className="decision-filter-count">{groups[value].length}</span>
+                  {label}<span className="decision-filter-count">{searchedGroups[value].length}</span>
                 </button>
               ))}
             </nav>
@@ -254,9 +283,17 @@ export default function Decisions() {
               <div className="decisions-results-toolbar">
                 <div className="decisions-results-heading">
                   <h2 id="decision-results-heading">{selectedLabel} applicants</h2>
-                  <p role="status">{applicants.length} {applicants.length === 1 ? 'applicant' : 'applicants'}</p>
+                  <p role="status">
+                    {appliedSearch
+                      ? `${applicants.length} of ${groups[selectedDecision].length} match "${appliedSearch}"`
+                      : `${applicants.length} ${applicants.length === 1 ? 'applicant' : 'applicants'}`}
+                  </p>
                 </div>
-                {isAdmin ? <AdminEmailCopy key={selectedDecision} applicants={applicants} decisionLabel={selectedLabel} /> : null}
+                <ApplicantSearchField className="decisions-search" inputClassName="decisions-search-input"
+                  value={searchInput} onChange={setSearchInput} />
+                {/* Copies the whole decision bucket, never the searched subset: a filter box
+                    must not silently shrink a mail list from 37 recipients to 2. */}
+                {isAdmin ? <AdminEmailCopy key={selectedDecision} applicants={groups[selectedDecision]} decisionLabel={selectedLabel} /> : null}
               </div>
               {applicants.length ? (
                 <div className="decisions-table-scroll" role="region" aria-label={`${selectedLabel} applicants table`} tabIndex={0}>
@@ -270,9 +307,19 @@ export default function Decisions() {
                 </div>
               ) : (
                 <div className="decisions-empty">
-                  <h3>No {selectedLabel.toLowerCase()} applicants yet</h3>
-                  <p>Applicants will appear here when a {selectedDecision === 'accept' ? 'acceptance' : selectedDecision === 'waitlist' ? 'waitlist' : 'rejection'} decision is saved.</p>
-                  <Link to="/review" className="decisions-review-link">Review applications</Link>
+                  {appliedSearch ? (
+                    <>
+                      <h3>No {selectedLabel.toLowerCase()} applicants match "{appliedSearch}"</h3>
+                      <p>Check the other decisions above, or clear the search to see everyone.</p>
+                      <button type="button" className="decisions-review-link" onClick={() => setSearchInput('')}>Clear search</button>
+                    </>
+                  ) : (
+                    <>
+                      <h3>No {selectedLabel.toLowerCase()} applicants yet</h3>
+                      <p>Applicants will appear here when a {selectedDecision === 'accept' ? 'acceptance' : selectedDecision === 'waitlist' ? 'waitlist' : 'rejection'} decision is saved.</p>
+                      <Link to="/review" className="decisions-review-link">Review applications</Link>
+                    </>
+                  )}
                 </div>
               )}
             </section>
